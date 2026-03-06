@@ -2,14 +2,28 @@
 
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
-import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
+import { formatCurrency, formatPercent, formatShares } from '@/lib/utils';
 
 interface StockCardProps {
   stock: StockWithCalculations;
+  usdRate?: number;
+  privacyMode?: boolean;
 }
 
-export default function StockCard({ stock }: StockCardProps) {
+const MASK = '****';
+
+export default function StockCard({ stock, usdRate = 0, privacyMode = false }: StockCardProps) {
   const isProfit = (stock.totalProfit || 0) >= 0;
+  const isUS = stock.market === 'US';
+
+  function TWDLine({ usd, rate }: { usd: number; rate: number }) {
+    if (rate <= 0 || privacyMode) return null;
+    return (
+      <p className="text-[10px] text-gray-400">
+        ≈ NT$ {Math.round(usd * rate).toLocaleString()}
+      </p>
+    );
+  }
 
   return (
     <div className="rounded-xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow dark:bg-gray-800 dark:border-gray-700">
@@ -28,8 +42,14 @@ export default function StockCard({ stock }: StockCardProps) {
         <div className={`flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium ${
           isProfit ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
         }`}>
-          {isProfit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-          {formatPercent(stock.totalProfitPercent || 0)}
+          {privacyMode ? (
+            <span>{MASK}</span>
+          ) : (
+            <>
+              {isProfit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+              {formatPercent(stock.totalProfitPercent || 0)}
+            </>
+          )}
         </div>
       </div>
 
@@ -39,22 +59,24 @@ export default function StockCard({ stock }: StockCardProps) {
           <p className="font-semibold text-gray-900 dark:text-white">
             {stock.currentPrice ? formatCurrency(stock.currentPrice, stock.market) : '-'}
           </p>
+          {isUS && stock.currentPrice ? <TWDLine usd={stock.currentPrice} rate={usdRate} /> : null}
         </div>
         <div>
           <p className="text-xs text-gray-500 dark:text-gray-400">平均成本</p>
           <p className="font-semibold text-gray-900 dark:text-white">
-            {formatCurrency(stock.averagePrice, stock.market)}
+            {privacyMode ? MASK : formatCurrency(stock.averagePrice, stock.market)}
           </p>
         </div>
         <div>
           <p className="text-xs text-gray-500 dark:text-gray-400">持有股數</p>
-          <p className="font-semibold text-gray-900 dark:text-white">{formatNumber(stock.totalShares, 0)}</p>
+          <p className="font-semibold text-gray-900 dark:text-white">{formatShares(stock.totalShares, stock.market)}</p>
         </div>
         <div>
           <p className="text-xs text-gray-500 dark:text-gray-400">未實現損益</p>
           <p className={`font-semibold ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-            {stock.totalProfit !== undefined ? formatCurrency(stock.totalProfit, stock.market) : '-'}
+            {privacyMode ? MASK : (stock.totalProfit !== undefined ? formatCurrency(stock.totalProfit, stock.market) : '-')}
           </p>
+          {!privacyMode && isUS && stock.totalProfit !== undefined ? <TWDLine usd={stock.totalProfit} rate={usdRate} /> : null}
         </div>
       </div>
     </div>

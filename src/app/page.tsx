@@ -8,24 +8,31 @@ import AlertStatusPanel from '@/components/dashboard/AlertStatusPanel';
 import PriceChart from '@/components/dashboard/PriceChart';
 import { StockWithCalculations, IAlert, IStock } from '@/types';
 import { enrichStockWithCalculations } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
+import { Loader2, DollarSign } from 'lucide-react';
 
 export default function DashboardPage() {
   const [stocks, setStocks] = useState<StockWithCalculations[]>([]);
   const [alerts, setAlerts] = useState<IAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [usdRate, setUsdRate] = useState(0);
+  const [privacyMode, setPrivacyMode] = useState(true); // 預設隱藏
 
   const fetchData = useCallback(async () => {
     try {
-      const [stocksRes, alertsRes] = await Promise.all([
+      const [stocksRes, alertsRes, rateRes] = await Promise.all([
         fetch('/api/stocks'),
         fetch('/api/alerts'),
+        fetch('/api/exchange-rate'),
       ]);
 
       const stocksData: IStock[] = await stocksRes.json();
       const alertsData: IAlert[] = await alertsRes.json();
 
-      // Fetch prices for all stocks
+      try {
+        const rateData = await rateRes.json();
+        setUsdRate(rateData.rate || 0);
+      } catch { /* ignore */ }
+
       if (stocksData.length > 0) {
         try {
           const symbolsParam = JSON.stringify(
@@ -42,10 +49,7 @@ export default function DashboardPage() {
 
           setStocks(enrichedStocks);
         } catch {
-          const enrichedStocks = stocksData.map((stock) =>
-            enrichStockWithCalculations(stock)
-          );
-          setStocks(enrichedStocks);
+          setStocks(stocksData.map((stock) => enrichStockWithCalculations(stock)));
         }
       } else {
         setStocks([]);
@@ -72,29 +76,46 @@ export default function DashboardPage() {
   }
 
   return (
-    <div>
+    <div className="flex flex-col">
       <Header title="投資組合總覽" subtitle="即時監控你的股票投資" onRefresh={fetchData} />
-      <div className="p-6 space-y-6">
-        <PortfolioSummary stocks={stocks} />
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">持股一覽</h2>
+      <div className="p-4 space-y-5 sm:p-6">
+        {/* 匯率資訊 */}
+        {usdRate > 0 && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 sm:text-sm dark:text-gray-400">
+            <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span>今日匯率：USD/TWD = <strong className="text-gray-700 dark:text-gray-200">{usdRate.toFixed(2)}</strong></span>
+          </div>
+        )}
+
+        {/* 摘要卡片 */}
+        <PortfolioSummary
+          stocks={stocks}
+          usdRate={usdRate}
+          privacyMode={privacyMode}
+          onTogglePrivacy={() => setPrivacyMode(!privacyMode)}
+        />
+
+        {/* 持股一覽 + 右側面板 */}
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+          {/* 持股卡片 */}
+          <div className="xl:col-span-2">
             {stocks.length === 0 ? (
-              <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-                <p className="text-gray-400 text-lg">尚未新增任何持股</p>
-                <p className="text-gray-400 text-sm mt-1">前往「持股管理」開始記錄</p>
+              <div className="rounded-xl bg-white p-8 text-center shadow-sm border border-gray-200 sm:p-12 dark:bg-gray-800 dark:border-gray-700">
+                <p className="text-gray-400 text-base sm:text-lg">尚未新增任何持股</p>
+                <p className="text-gray-400 text-xs mt-1 sm:text-sm">前往「持股管理」開始記錄</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                 {stocks.map((stock) => (
-                  <StockCard key={stock._id} stock={stock} />
+                  <StockCard key={stock._id} stock={stock} usdRate={usdRate} privacyMode={privacyMode} />
                 ))}
               </div>
             )}
           </div>
 
-          <div className="space-y-6">
+          {/* 右側：圓餅圖 + 警報 */}
+          <div className="space-y-5">
             <PriceChart stocks={stocks} />
             <AlertStatusPanel alerts={alerts} />
           </div>

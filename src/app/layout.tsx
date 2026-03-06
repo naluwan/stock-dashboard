@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Sidebar from '@/components/layout/Sidebar';
+import AlertPollerProvider from '@/components/layout/AlertPollerProvider';
+import ToastProvider from '@/components/ui/ToastProvider';
 
 export const metadata: Metadata = {
   title: 'Stock Dashboard - 股票投資監控',
@@ -14,9 +16,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-TW">
-      <body className="bg-gray-50 text-gray-900 antialiased dark:bg-gray-900 dark:text-white">
+      <body className="bg-gray-100 text-gray-900 antialiased dark:bg-gray-900 dark:text-white">
+        <AlertPollerProvider />
+        <ToastProvider />
         <Sidebar />
-        <main className="min-h-screen lg:ml-64">
+        <main className="min-h-screen transition-all lg:ml-60">
           {children}
         </main>
       </body>

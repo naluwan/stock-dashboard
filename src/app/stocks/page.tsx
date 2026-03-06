@@ -7,18 +7,45 @@ import AddStockForm from '@/components/stocks/AddStockForm';
 import Modal from '@/components/ui/Modal';
 import { StockWithCalculations, IStock, Market, Purchase } from '@/types';
 import { enrichStockWithCalculations } from '@/lib/utils';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, DollarSign, Eye, EyeOff } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { confirmToast } from '@/lib/confirmToast';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 
 export default function StocksPage() {
   const [stocks, setStocks] = useState<StockWithCalculations[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStock, setEditingStock] = useState<StockWithCalculations | null>(null);
+  const [usdRate, setUsdRate] = useState(0);
+  const [privacyMode, setPrivacyMode] = useState(true);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    })
+  );
 
   const fetchStocks = useCallback(async () => {
     try {
-      const res = await fetch('/api/stocks');
+      const [res, rateRes] = await Promise.all([
+        fetch('/api/stocks'),
+        fetch('/api/exchange-rate'),
+      ]);
       const data: IStock[] = await res.json();
+
+      try {
+        const rateData = await rateRes.json();
+        setUsdRate(rateData.rate || 0);
+      } catch { /* ignore */ }
 
       if (data.length > 0) {
         try {
@@ -50,6 +77,33 @@ export default function StocksPage() {
   useEffect(() => {
     fetchStocks();
   }, [fetchStocks]);
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = stocks.findIndex((s) => s._id === active.id);
+    const newIndex = stocks.findIndex((s) => s._id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Optimistic update
+    const reordered = arrayMove(stocks, oldIndex, newIndex);
+    setStocks(reordered);
+
+    // Persist to DB
+    try {
+      const orderedIds = reordered.map((s) => s._id!);
+      await fetch('/api/stocks/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds }),
+      });
+    } catch (error) {
+      console.error('Failed to save order:', error);
+      // Revert on failure
+      setStocks(arrayMove(reordered, newIndex, oldIndex));
+    }
+  };
 
   const handleAddStock = async (data: {
     symbol: string;
@@ -90,11 +144,15 @@ export default function StocksPage() {
   };
 
   const handleDeleteStock = async (id: string) => {
-    if (!confirm('確定要刪除此持股紀錄嗎？')) return;
+    const confirmed = await confirmToast('確定要刪除此持股紀錄嗎？');
+    if (!confirmed) return;
 
     const res = await fetch(`/api/stocks?id=${id}`, { method: 'DELETE' });
     if (res.ok) {
+      toast.success('已刪除持股紀錄');
       fetchStocks();
+    } else {
+      toast.error('刪除失敗，請稍後再試');
     }
   };
 
@@ -110,25 +168,50 @@ export default function StocksPage() {
     <div>
       <Header title="持股管理" subtitle="管理你的股票投資組合" onRefresh={fetchStocks} />
 
-      <div className="p-6">
-        <div className="mb-6 flex items-center justify-between">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            共 {stocks.length} 檔持股
-          </p>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
-          >
-            <Plus className="h-4 w-4" />
-            新增持股
-          </button>
+      <div className="p-4 sm:p-6">
+        <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              共 {stocks.length} 檔持股
+            </p>
+            {usdRate > 0 && (
+              <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                <DollarSign className="h-3 w-3" />
+                USD/TWD = {usdRate.toFixed(2)}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPrivacyMode(!privacyMode)}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+            >
+              {privacyMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {privacyMode ? '顯示金額' : '隱藏金額'}
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 sm:w-auto"
+            >
+              <Plus className="h-4 w-4" />
+              新增持股
+            </button>
+          </div>
         </div>
 
-        <StockTable
-          stocks={stocks}
-          onEdit={(stock) => setEditingStock(stock)}
-          onDelete={handleDeleteStock}
-        />
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <StockTable
+            stocks={stocks}
+            onEdit={(stock) => setEditingStock(stock)}
+            onDelete={handleDeleteStock}
+            usdRate={usdRate}
+            privacyMode={privacyMode}
+          />
+        </DndContext>
       </div>
 
       <Modal
