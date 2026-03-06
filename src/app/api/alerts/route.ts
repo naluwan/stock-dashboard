@@ -31,7 +31,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { _id, ...updateData } = body;
 
-    const alert = await Alert.findByIdAndUpdate(_id, updateData, { new: true });
+    const alert = await Alert.findByIdAndUpdate(_id, updateData, { returnDocument: 'after' });
 
     if (!alert) {
       return NextResponse.json({ error: 'Alert not found' }, { status: 404 });

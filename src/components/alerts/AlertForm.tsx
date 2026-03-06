@@ -11,6 +11,7 @@ interface AlertFormProps {
     market: Market;
     type: AlertType;
     targetValue: number;
+    maxTriggers: number;
     notifyChannels: ('email' | 'line')[];
   }) => Promise<void>;
   onCancel: () => void;
@@ -20,6 +21,7 @@ export default function AlertForm({ stocks, onSubmit, onCancel }: AlertFormProps
   const [selectedStock, setSelectedStock] = useState('');
   const [type, setType] = useState<AlertType>('below_price');
   const [targetValue, setTargetValue] = useState<number>(0);
+  const [maxTriggers, setMaxTriggers] = useState<number>(0);
   const [channels, setChannels] = useState<('email' | 'line')[]>(['email']);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -30,6 +32,14 @@ export default function AlertForm({ stocks, onSubmit, onCancel }: AlertFormProps
     { value: 'above_price', label: '高於指定價格', description: '當股價高於設定的價格時通知' },
     { value: 'below_avg_percent', label: '低於均價百分比', description: '當股價低於平均成本的某個百分比時通知' },
     { value: 'above_avg_percent', label: '高於均價百分比', description: '當股價高於平均成本的某個百分比時通知' },
+  ];
+
+  const triggerOptions = [
+    { value: 0, label: '持續通知（不限次數）' },
+    { value: 1, label: '只通知 1 次' },
+    { value: 3, label: '最多通知 3 次' },
+    { value: 5, label: '最多通知 5 次' },
+    { value: 10, label: '最多通知 10 次' },
   ];
 
   const toggleChannel = (ch: 'email' | 'line') => {
@@ -51,6 +61,7 @@ export default function AlertForm({ stocks, onSubmit, onCancel }: AlertFormProps
         market: selectedStockData.market,
         type,
         targetValue,
+        maxTriggers,
         notifyChannels: channels,
       });
     } finally {
@@ -128,6 +139,28 @@ export default function AlertForm({ stocks, onSubmit, onCancel }: AlertFormProps
 
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          觸發次數限制
+        </label>
+        <select
+          value={maxTriggers}
+          onChange={(e) => setMaxTriggers(parseInt(e.target.value))}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        >
+          {triggerOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+          {maxTriggers === 0
+            ? '警報將持續觸發直到手動停用'
+            : `達到 ${maxTriggers} 次後自動停用警報`}
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           通知管道
         </label>
         <div className="flex gap-3">
@@ -140,7 +173,7 @@ export default function AlertForm({ stocks, onSubmit, onCancel }: AlertFormProps
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
             }`}
           >
-            📧 Email
+            Email
           </button>
           <button
             type="button"
@@ -151,7 +184,7 @@ export default function AlertForm({ stocks, onSubmit, onCancel }: AlertFormProps
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
             }`}
           >
-            💬 LINE
+            LINE
           </button>
         </div>
       </div>

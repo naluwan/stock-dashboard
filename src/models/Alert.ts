@@ -16,6 +16,8 @@ const AlertSchema = new Schema<AlertDocument>(
     targetValue: { type: Number, required: true },
     isActive: { type: Boolean, default: true },
     lastTriggered: { type: Date },
+    triggerCount: { type: Number, default: 0 },
+    maxTriggers: { type: Number, default: 0 },  // 0 = 無限制
     notifyChannels: [{ type: String, enum: ['email', 'line'] }],
   },
   {

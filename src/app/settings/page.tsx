@@ -5,12 +5,20 @@ import Header from '@/components/layout/Header';
 import EmailSettings from '@/components/settings/EmailSettings';
 import LineSettings from '@/components/settings/LineSettings';
 import { INotificationConfig } from '@/types';
-import { Loader2, CheckCircle2 } from 'lucide-react';
+import { Loader2, CheckCircle2, Send, AlertCircle } from 'lucide-react';
+
+interface TestResult {
+  channel: string;
+  success: boolean;
+  error?: string;
+}
 
 export default function SettingsPage() {
   const [config, setConfig] = useState<INotificationConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState('');
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [isTesting, setIsTesting] = useState<string | null>(null);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -61,6 +69,29 @@ export default function SettingsPage() {
     }
   };
 
+  const handleTestNotification = async (channel: 'email' | 'line') => {
+    setIsTesting(channel);
+    setTestResults([]);
+    try {
+      const res = await fetch('/api/notifications/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel }),
+      });
+      const data = await res.json();
+      if (data.results) {
+        setTestResults(data.results);
+      } else if (data.error) {
+        setTestResults([{ channel, success: false, error: data.error }]);
+      }
+    } catch {
+      setTestResults([{ channel, success: false, error: '發送請求失敗' }]);
+    } finally {
+      setIsTesting(null);
+      setTimeout(() => setTestResults([]), 8000);
+    }
+  };
+
   if (isLoading || !config) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -83,6 +114,63 @@ export default function SettingsPage() {
       <div className="p-6 space-y-6">
         <EmailSettings config={config.email} onSave={handleSaveEmail} />
         <LineSettings config={config.line} onSave={handleSaveLine} />
+
+        {/* 測試發送區塊 */}
+        <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="rounded-lg bg-amber-50 p-2 dark:bg-amber-900/20">
+              <Send className="h-5 w-5 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">測試通知</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">發送測試訊息確認設定是否正確</p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => handleTestNotification('line')}
+              disabled={isTesting !== null}
+              className="flex items-center gap-2 rounded-lg bg-green-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
+            >
+              {isTesting === 'line' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              測試 LINE 通知
+            </button>
+            <button
+              onClick={() => handleTestNotification('email')}
+              disabled={isTesting !== null}
+              className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+            >
+              {isTesting === 'email' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              測試 Email 通知
+            </button>
+          </div>
+
+          {testResults.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {testResults.map((result, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
+                    result.success
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                      : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                  }`}
+                >
+                  {result.success ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                  )}
+                  <span>
+                    {result.channel === 'line' ? 'LINE' : 'Email'}：
+                    {result.success ? '發送成功！請檢查是否收到訊息。' : result.error}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="rounded-xl bg-gray-50 p-6 dark:bg-gray-800/50">
           <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">使用說明</h3>
