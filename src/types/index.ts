@@ -6,6 +6,7 @@ export interface Purchase {
   price: number;
   date: Date;
   note?: string;
+  exchangeRate?: number; // 買入時匯率（僅美股），用於計算台幣成本
 }
 
 export interface IStock {
@@ -14,6 +15,7 @@ export interface IStock {
   name: string;
   market: Market;
   purchases: Purchase[];
+  sortOrder?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -41,6 +43,8 @@ export interface IAlert {
   targetValue: number;
   isActive: boolean;
   lastTriggered?: Date;
+  triggerCount: number;      // 已觸發次數
+  maxTriggers: number;       // 最大觸發次數，0 = 無限制
   notifyChannels: ('email' | 'line')[];
   createdAt?: Date;
   updatedAt?: Date;

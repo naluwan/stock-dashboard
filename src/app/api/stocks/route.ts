@@ -5,7 +5,7 @@ import Stock from '@/models/Stock';
 export async function GET() {
   try {
     await connectDB();
-    const stocks = await Stock.find({}).sort({ createdAt: -1 }).lean();
+    const stocks = await Stock.find({}).sort({ sortOrder: 1, createdAt: -1 }).lean();
     return NextResponse.json(stocks);
   } catch (error) {
     console.error('GET /api/stocks error:', error);
@@ -27,11 +27,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(existingStock.toObject());
     }
 
+    // 新增時 sortOrder 設為最大值 +1（排到最後）
+    const maxDoc = await Stock.findOne({}).sort({ sortOrder: -1 }).lean();
+    const nextOrder = (maxDoc?.sortOrder ?? -1) + 1;
+
     const stock = await Stock.create({
       symbol: symbol.toUpperCase(),
       name,
       market,
       purchases,
+      sortOrder: nextOrder,
     });
 
     return NextResponse.json(stock.toObject(), { status: 201 });
@@ -50,7 +55,7 @@ export async function PUT(request: NextRequest) {
     const stock = await Stock.findByIdAndUpdate(
       _id,
       { name, purchases },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
 
     if (!stock) {

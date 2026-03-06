@@ -8,6 +8,7 @@ const PurchaseSchema = new Schema({
   price: { type: Number, required: true },
   date: { type: Date, required: true, default: Date.now },
   note: { type: String },
+  exchangeRate: { type: Number },
 });
 
 const StockSchema = new Schema<StockDocument>(
@@ -16,6 +17,7 @@ const StockSchema = new Schema<StockDocument>(
     name: { type: String, required: true },
     market: { type: String, enum: ['TW', 'US'], required: true },
     purchases: [PurchaseSchema],
+    sortOrder: { type: Number, default: 0 },
   },
   {
     timestamps: true,
