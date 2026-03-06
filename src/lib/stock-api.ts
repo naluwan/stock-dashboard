@@ -48,32 +48,80 @@ function parseTWStockData(data: Record<string, string>): PriceData {
   };
 }
 
-// Fetch US stock price using Yahoo Finance
+// Fetch US stock price using Yahoo Finance (多層備援)
 async function fetchUSStockPrice(symbol: string): Promise<PriceData | null> {
+  // 方案一：yahoo-finance2 npm 套件
   try {
-    const yahooFinance = (await import('yahoo-finance2')).default;
+    const YahooFinance = (await import('yahoo-finance2')).default;
+    const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const quote: any = await yahooFinance.quote(symbol);
 
-    if (!quote) return null;
-
-    return {
-      symbol: quote.symbol || symbol,
-      name: quote.shortName || quote.longName || symbol,
-      market: 'US',
-      currentPrice: quote.regularMarketPrice || 0,
-      previousClose: quote.regularMarketPreviousClose || 0,
-      change: quote.regularMarketChange || 0,
-      changePercent: quote.regularMarketChangePercent || 0,
-      high: quote.regularMarketDayHigh || 0,
-      low: quote.regularMarketDayLow || 0,
-      volume: quote.regularMarketVolume || 0,
-      updatedAt: new Date(),
-    };
+    if (quote && quote.regularMarketPrice) {
+      return {
+        symbol: quote.symbol || symbol,
+        name: quote.shortName || quote.longName || symbol,
+        market: 'US',
+        currentPrice: quote.regularMarketPrice || 0,
+        previousClose: quote.regularMarketPreviousClose || 0,
+        change: quote.regularMarketChange || 0,
+        changePercent: quote.regularMarketChangePercent || 0,
+        high: quote.regularMarketDayHigh || 0,
+        low: quote.regularMarketDayLow || 0,
+        volume: quote.regularMarketVolume || 0,
+        updatedAt: new Date(),
+      };
+    }
   } catch (error) {
-    console.error(`Error fetching US stock ${symbol}:`, error);
-    return null;
+    console.error(`yahoo-finance2 quote failed for ${symbol}, trying REST API:`, error);
   }
+
+  // 方案二：Yahoo Finance REST API 直接呼叫
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const result = data?.chart?.result?.[0];
+      if (result) {
+        const meta = result.meta;
+        const quotes = result.indicators?.quote?.[0];
+        const timestamps = result.timestamp;
+
+        // 取最後一筆有效資料
+        let lastIdx = timestamps ? timestamps.length - 1 : -1;
+        while (lastIdx >= 0 && (!quotes?.close?.[lastIdx] || quotes.close[lastIdx] === null)) {
+          lastIdx--;
+        }
+
+        const currentPrice = meta?.regularMarketPrice || (lastIdx >= 0 ? quotes?.close?.[lastIdx] : 0) || 0;
+        const previousClose = meta?.chartPreviousClose || meta?.previousClose || 0;
+        const change = currentPrice - previousClose;
+        const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
+
+        return {
+          symbol: meta?.symbol || symbol,
+          name: meta?.shortName || meta?.longName || symbol,
+          market: 'US',
+          currentPrice,
+          previousClose,
+          change,
+          changePercent,
+          high: lastIdx >= 0 ? (quotes?.high?.[lastIdx] || 0) : 0,
+          low: lastIdx >= 0 ? (quotes?.low?.[lastIdx] || 0) : 0,
+          volume: lastIdx >= 0 ? (quotes?.volume?.[lastIdx] || 0) : 0,
+          updatedAt: new Date(),
+        };
+      }
+    }
+  } catch (error) {
+    console.error(`Yahoo REST API quote also failed for ${symbol}:`, error);
+  }
+
+  return null;
 }
 
 export async function fetchStockPrice(symbol: string, market: Market): Promise<PriceData | null> {
@@ -154,26 +202,65 @@ export async function searchTWStocks(query: string): Promise<{ symbol: string; n
   }));
 }
 
-// 搜尋美股（透過 yahoo-finance2 的 search）
+// 搜尋美股（透過 yahoo-finance2 的 search，備案用 Yahoo REST API）
 export async function searchUSStocks(query: string): Promise<{ symbol: string; name: string; market: Market }[]> {
+  // 方案一：yahoo-finance2 npm 套件
   try {
-    const yahooFinance = (await import('yahoo-finance2')).default;
+    const YahooFinance = (await import('yahoo-finance2')).default;
+    const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: any = await yahooFinance.search(query);
-    if (!result?.quotes) return [];
-
-    return result.quotes
-      .filter((q: any) => q.quoteType === 'EQUITY' && q.symbol)
-      .slice(0, 10)
-      .map((q: any) => ({
-        symbol: q.symbol,
-        name: q.shortname || q.longname || q.symbol,
-        market: 'US' as Market,
-      }));
+    if (result?.quotes && result.quotes.length > 0) {
+      return result.quotes
+        .filter((q: any) => (q.quoteType === 'EQUITY' || q.quoteType === 'ETF') && q.symbol)
+        .slice(0, 10)
+        .map((q: any) => ({
+          symbol: q.symbol,
+          name: q.shortname || q.longname || q.symbol,
+          market: 'US' as Market,
+        }));
+    }
   } catch (error) {
-    console.error('US stock search error:', error);
-    return [];
+    console.error('yahoo-finance2 search failed, trying REST API:', error);
   }
+
+  // 方案二：直接呼叫 Yahoo Finance REST API
+  try {
+    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0&listsCount=0&quotesQueryId=tss_match_phrase_query`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.quotes && Array.isArray(data.quotes)) {
+        return data.quotes
+          .filter((q: any) => (q.quoteType === 'EQUITY' || q.quoteType === 'ETF') && q.symbol)
+          .slice(0, 10)
+          .map((q: any) => ({
+            symbol: q.symbol,
+            name: q.shortname || q.longname || q.symbol,
+            market: 'US' as Market,
+          }));
+      }
+    }
+  } catch (error) {
+    console.error('Yahoo REST API search also failed:', error);
+  }
+
+  // 方案三：如果搜尋都失敗，嘗試直接當作股票代碼查報價
+  try {
+    const price = await fetchStockPrice(query.toUpperCase(), 'US');
+    if (price) {
+      return [{
+        symbol: price.symbol,
+        name: price.name,
+        market: 'US' as Market,
+      }];
+    }
+  } catch { /* ignore */ }
+
+  return [];
 }
 
 export async function fetchMultipleStockPrices(

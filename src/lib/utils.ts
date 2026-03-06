@@ -53,6 +53,10 @@ export function formatNumber(value: number, decimals: number = 2): string {
   return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 }
 
+export function formatShares(value: number, market: 'TW' | 'US'): string {
+  return formatNumber(value, market === 'US' ? 5 : 0);
+}
+
 export function formatPercent(value: number): string {
   return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 }
