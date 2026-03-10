@@ -12,6 +12,7 @@ import {
   RefreshCw,
   DollarSign,
   GripVertical,
+  ChevronDown,
 } from 'lucide-react';
 import {
   DndContext,
@@ -28,6 +29,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import StockPriceChart from '@/components/dashboard/StockPriceChart';
 
 interface FavoriteItem {
   _id: string;
@@ -47,10 +49,14 @@ function SortableCard({
   item,
   usdRate,
   onRemove,
+  isExpanded,
+  onToggleExpand,
 }: {
   item: FavoriteWithPrice;
   usdRate: number;
   onRemove: (symbol: string, market: Market) => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item._id,
@@ -75,67 +81,83 @@ function SortableCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-xl bg-white p-4 shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 ${
+      className={`rounded-xl bg-white shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 ${
         isDragging ? 'ring-2 ring-emerald-400/50 shadow-lg' : ''
       }`}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2">
+      <div className="p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              {...attributes}
+              {...listeners}
+              className="cursor-grab touch-none rounded p-0.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600 dark:hover:text-gray-400"
+              aria-label="拖拉排序"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+            <span
+              className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                item.market === 'TW'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+              }`}
+            >
+              {item.market}
+            </span>
+            <button onClick={onToggleExpand} className="flex items-center gap-1 hover:opacity-70 transition-opacity">
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white text-left">{item.symbol}</p>
+                <p className="text-xs text-gray-400 text-left">{item.name}</p>
+              </div>
+              <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
           <button
-            {...attributes}
-            {...listeners}
-            className="cursor-grab touch-none rounded p-0.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600 dark:hover:text-gray-400"
-            aria-label="拖拉排序"
+            onClick={() => onRemove(item.symbol, item.market)}
+            className="rounded-full p-1 text-yellow-500 hover:text-red-500 transition-colors"
           >
-            <GripVertical className="h-4 w-4" />
+            <Star className="h-4 w-4 fill-current" />
           </button>
-          <span
-            className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-              item.market === 'TW'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-            }`}
-          >
-            {item.market}
-          </span>
-          <div>
-            <p className="font-medium text-gray-900 dark:text-white">{item.symbol}</p>
-            <p className="text-xs text-gray-400">{item.name}</p>
-          </div>
         </div>
-        <button
-          onClick={() => onRemove(item.symbol, item.market)}
-          className="rounded-full p-1 text-yellow-500 hover:text-red-500 transition-colors"
-        >
-          <Star className="h-4 w-4 fill-current" />
-        </button>
-      </div>
-      {price && (
-        <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-          <div>
-            <p className="text-[11px] text-gray-400">現價</p>
-            <p className="font-semibold text-gray-900 dark:text-white">
-              {formatCurrency(price.currentPrice, item.market)}
-            </p>
-            {isUS && usdRate > 0 && (
-              <p className="text-[10px] text-gray-400">
-                ≈ NT$ {formatNumber(price.currentPrice * usdRate, 0)}
+        {price && (
+          <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+            <div>
+              <p className="text-[11px] text-gray-400">現價</p>
+              <p className="font-semibold text-gray-900 dark:text-white">
+                {formatCurrency(price.currentPrice, item.market)}
               </p>
-            )}
+              {isUS && usdRate > 0 && (
+                <p className="text-[10px] text-gray-400">
+                  ≈ NT$ {formatNumber(price.currentPrice * usdRate, 0)}
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-400">漲跌</p>
+              <p className={`font-semibold ${colorClass}`}>
+                {isUp ? '+' : ''}
+                {price.change.toFixed(2)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-400">漲跌幅</p>
+              <p className={`font-semibold ${colorClass}`}>{formatPercent(price.changePercent)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] text-gray-400">漲跌</p>
-            <p className={`font-semibold ${colorClass}`}>
-              {isUp ? '+' : ''}
-              {price.change.toFixed(2)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] text-gray-400">漲跌幅</p>
-            <p className={`font-semibold ${colorClass}`}>{formatPercent(price.changePercent)}</p>
-          </div>
+        )}
+      </div>
+
+      {/* 展開：走勢圖 */}
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="border-t border-gray-100 dark:border-gray-700 p-4">
+          <StockPriceChart symbol={item.symbol} market={item.market} currentPrice={price?.currentPrice} />
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -145,10 +167,14 @@ function SortableTableRow({
   item,
   usdRate,
   onRemove,
+  isExpanded,
+  onToggleExpand,
 }: {
   item: FavoriteWithPrice;
   usdRate: number;
   onRemove: (symbol: string, market: Market) => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item._id,
@@ -170,84 +196,95 @@ function SortableTableRow({
     : 'text-red-600 dark:text-red-400';
 
   return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${
-        isDragging ? 'bg-emerald-50 shadow-lg dark:bg-emerald-900/20' : ''
-      }`}
-    >
-      <td className="w-8 px-1 py-3 sm:px-2">
-        <button
-          {...attributes}
-          {...listeners}
-          className="cursor-grab touch-none rounded p-0.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600 dark:hover:text-gray-400"
-          aria-label="拖拉排序"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span
-            className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-              item.market === 'TW'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-            }`}
+    <>
+      <tr
+        ref={setNodeRef}
+        style={style}
+        className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${
+          isDragging ? 'bg-emerald-50 shadow-lg dark:bg-emerald-900/20' : ''
+        }`}
+      >
+        <td className="w-8 px-1 py-3 sm:px-2">
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab touch-none rounded p-0.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600 dark:hover:text-gray-400"
+            aria-label="拖拉排序"
           >
-            {item.market}
+            <GripVertical className="h-4 w-4" />
+          </button>
+        </td>
+        <td className="px-4 py-3">
+          <button onClick={onToggleExpand} className="flex items-center gap-2 hover:opacity-70 transition-opacity text-left">
+            <span
+              className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                item.market === 'TW'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+              }`}
+            >
+              {item.market}
+            </span>
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">{item.symbol}</p>
+              <p className="text-xs text-gray-400">{item.name}</p>
+            </div>
+            <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+          </button>
+        </td>
+        <td className="px-4 py-3 text-right">
+          <span className="font-medium text-gray-900 dark:text-white">
+            {price ? formatCurrency(price.currentPrice, item.market) : '—'}
           </span>
-          <div>
-            <p className="font-medium text-gray-900 dark:text-white">{item.symbol}</p>
-            <p className="text-xs text-gray-400">{item.name}</p>
+          {isUS && price && usdRate > 0 && (
+            <span className="block text-[10px] text-gray-400">
+              ≈ NT$ {formatNumber(price.currentPrice * usdRate, 2)}
+            </span>
+          )}
+        </td>
+        <td className={`px-4 py-3 text-right font-medium ${colorClass}`}>
+          {price ? (
+            <span className="flex items-center justify-end gap-1">
+              {isUp ? (
+                <TrendingUp className="h-3.5 w-3.5" />
+              ) : (
+                <TrendingDown className="h-3.5 w-3.5" />
+              )}
+              {isUp ? '+' : ''}
+              {price.change.toFixed(2)}
+            </span>
+          ) : (
+            '—'
+          )}
+        </td>
+        <td className={`px-4 py-3 text-right font-medium ${colorClass}`}>
+          {price ? `${isUp ? '+' : ''}${formatPercent(price.changePercent)}` : '—'}
+        </td>
+        <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">
+          {price ? formatCurrency(price.high, item.market) : '—'}
+        </td>
+        <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">
+          {price ? formatCurrency(price.low, item.market) : '—'}
+        </td>
+        <td className="px-4 py-3 text-center">
+          <button
+            onClick={() => onRemove(item.symbol, item.market)}
+            className="rounded-full p-1 text-yellow-500 hover:text-red-500 transition-colors"
+            title="移除自選"
+          >
+            <Star className="h-4 w-4 fill-current" />
+          </button>
+        </td>
+      </tr>
+      {/* 展開：走勢圖 */}
+      <tr className={`${isExpanded ? '' : 'hidden'}`}>
+        <td colSpan={8} className="px-4 pb-4 pt-0">
+          <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
+            <StockPriceChart symbol={item.symbol} market={item.market} currentPrice={price?.currentPrice} />
           </div>
-        </div>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <span className="font-medium text-gray-900 dark:text-white">
-          {price ? formatCurrency(price.currentPrice, item.market) : '—'}
-        </span>
-        {isUS && price && usdRate > 0 && (
-          <span className="block text-[10px] text-gray-400">
-            ≈ NT$ {formatNumber(price.currentPrice * usdRate, 2)}
-          </span>
-        )}
-      </td>
-      <td className={`px-4 py-3 text-right font-medium ${colorClass}`}>
-        {price ? (
-          <span className="flex items-center justify-end gap-1">
-            {isUp ? (
-              <TrendingUp className="h-3.5 w-3.5" />
-            ) : (
-              <TrendingDown className="h-3.5 w-3.5" />
-            )}
-            {isUp ? '+' : ''}
-            {price.change.toFixed(2)}
-          </span>
-        ) : (
-          '—'
-        )}
-      </td>
-      <td className={`px-4 py-3 text-right font-medium ${colorClass}`}>
-        {price ? `${isUp ? '+' : ''}${formatPercent(price.changePercent)}` : '—'}
-      </td>
-      <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">
-        {price ? formatCurrency(price.high, item.market) : '—'}
-      </td>
-      <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">
-        {price ? formatCurrency(price.low, item.market) : '—'}
-      </td>
-      <td className="px-4 py-3 text-center">
-        <button
-          onClick={() => onRemove(item.symbol, item.market)}
-          className="rounded-full p-1 text-yellow-500 hover:text-red-500 transition-colors"
-          title="移除自選"
-        >
-          <Star className="h-4 w-4 fill-current" />
-        </button>
-      </td>
-    </tr>
+        </td>
+      </tr>
+    </>
   );
 }
 
@@ -257,12 +294,17 @@ export default function WatchlistPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [usdRate, setUsdRate] = useState(0);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
     })
   );
+
+  const toggleExpand = (id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
+  };
 
   const loadFavorites = useCallback(async () => {
     try {
@@ -418,6 +460,8 @@ export default function WatchlistPage() {
                       item={item}
                       usdRate={usdRate}
                       onRemove={removeFavorite}
+                      isExpanded={expandedId === item._id}
+                      onToggleExpand={() => toggleExpand(item._id)}
                     />
                   ))}
                 </div>
@@ -464,6 +508,8 @@ export default function WatchlistPage() {
                             item={item}
                             usdRate={usdRate}
                             onRemove={removeFavorite}
+                            isExpanded={expandedId === item._id}
+                            onToggleExpand={() => toggleExpand(item._id)}
                           />
                         ))}
                       </tbody>
