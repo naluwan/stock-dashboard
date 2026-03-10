@@ -22,29 +22,37 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const config = await NotificationConfig.findOne({});
 
+    console.log('[LINE Webhook] Config found:', !!config);
+    console.log('[LINE Webhook] Has channelSecret:', !!config?.line?.channelSecret);
+    console.log('[LINE Webhook] Has signature:', !!signature);
+
     if (config?.line?.channelSecret) {
-      const isValid = verifySignature(body, signature, config.line.channelSecret);
+      const secret = config.line.channelSecret.trim();
+      const isValid = verifySignature(body, signature, secret);
+      console.log('[LINE Webhook] Signature valid:', isValid);
       if (!isValid) {
-        console.error('[LINE Webhook] Invalid signature');
         return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
       }
+    } else {
+      console.log('[LINE Webhook] No channelSecret in DB, skipping signature verification');
     }
 
     const data = JSON.parse(body);
     const events = data.events || [];
+    console.log('[LINE Webhook] Events count:', events.length);
 
     for (const event of events) {
+      console.log('[LINE Webhook] Event type:', event.type, event.message?.type || '');
+
       // 當有人加 Bot 為好友時，自動記錄 User ID
       if (event.type === 'follow') {
         const userId = event.source?.userId;
         if (userId && config) {
-          // 檢查是否已存在
           const exists = config.line.recipients.some(
             (r: { userId: string }) => r.userId === userId
           );
 
           if (!exists) {
-            // 嘗試取得使用者的顯示名稱
             let displayName = `User ${userId.substring(0, 8)}`;
             try {
               const profileRes = await fetch(
@@ -70,12 +78,37 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 當有人傳訊息給 Bot 時，回覆他的 User ID（方便手動設定）
-      if (event.type === 'message' && event.message?.type === 'text') {
+      // 當有人傳任何訊息給 Bot 時，回覆他的 User ID
+      if (event.type === 'message') {
         const userId = event.source?.userId;
         const replyToken = event.replyToken;
 
         if (userId && replyToken && config?.line?.channelAccessToken) {
+          // 同時自動加入接收者（如果還沒加過）
+          const exists = config.line.recipients.some(
+            (r: { userId: string }) => r.userId === userId
+          );
+          if (!exists) {
+            let displayName = `User ${userId.substring(0, 8)}`;
+            try {
+              const profileRes = await fetch(
+                `https://api.line.me/v2/bot/profile/${userId}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${config.line.channelAccessToken}`,
+                  },
+                }
+              );
+              if (profileRes.ok) {
+                const profile = await profileRes.json();
+                displayName = profile.displayName || displayName;
+              }
+            } catch (e) { /* ignore */ }
+            config.line.recipients.push({ userId, displayName });
+            await config.save();
+            console.log(`[LINE Webhook] 自動新增接收者: ${displayName} (${userId})`);
+          }
+
           try {
             await fetch('https://api.line.me/v2/bot/message/reply', {
               method: 'POST',
@@ -93,6 +126,7 @@ export async function POST(request: NextRequest) {
                 ],
               }),
             });
+            console.log(`[LINE Webhook] 已回覆 User ID 給 ${userId}`);
           } catch (e) {
             console.error('[LINE Webhook] Reply error:', e);
           }
@@ -107,7 +141,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET: LINE Webhook 驗證端點（LINE 設定時會先打 GET 確認）
+// GET: LINE Webhook 驗證端點
 export async function GET() {
   return NextResponse.json({ status: 'LINE Webhook is active' });
 }

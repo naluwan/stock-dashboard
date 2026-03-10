@@ -198,7 +198,14 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
   return (
     <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-medium text-gray-900 dark:text-white">價格走勢</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-medium text-gray-900 dark:text-white">價格走勢</h3>
+          {isIntraday && (
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">
+              {market === 'US' ? '(美東時間)' : '(台灣時間)'}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <TimeSelector />
           {/* 圖表模式切換 */}
