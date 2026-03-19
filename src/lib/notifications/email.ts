@@ -66,7 +66,7 @@ export function buildAlertEmailHTML(
           <p style="margin: 5px 0;"><strong>目前價格:</strong> ${currentPrice} ${currency}</p>
           <p style="margin: 5px 0;"><strong>觸發條件:</strong> ${typeLabels[alertType] || alertType}</p>
           <p style="margin: 5px 0;"><strong>市場:</strong> ${market === 'TW' ? '台股' : '美股'}</p>
-          <p style="margin: 5px 0;"><strong>時間:</strong> ${new Date().toLocaleString('zh-TW')}</p>
+          <p style="margin: 5px 0;"><strong>時間:</strong> ${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</p>
         </div>
         <p style="color: #666; font-size: 12px; margin-top: 15px;">
           此通知由 Stock Dashboard 自動發送

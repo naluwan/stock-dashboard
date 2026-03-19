@@ -87,5 +87,5 @@ export function buildAlertLineMessage(
     below_avg_percent: `低於均價 ${targetValue}%`,
   };
 
-  return `${stockName} (${stockSymbol})\n目前價格: ${currentPrice} ${currency}\n觸發條件: ${typeLabels[alertType] || alertType}\n市場: ${market === 'TW' ? '台股' : '美股'}\n時間: ${new Date().toLocaleString('zh-TW')}`;
+  return `${stockName} (${stockSymbol})\n目前價格: ${currentPrice} ${currency}\n觸發條件: ${typeLabels[alertType] || alertType}\n市場: ${market === 'TW' ? '台股' : '美股'}\n時間: ${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`;
 }

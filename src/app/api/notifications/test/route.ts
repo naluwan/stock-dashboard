@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
             { channelAccessToken: config.line.channelAccessToken },
             {
               userIds: config.line.recipients.map((r: { userId: string }) => r.userId),
-              message: `🧪 測試通知\n\nStock Dashboard 通知功能正常運作！\n\n時間: ${new Date().toLocaleString('zh-TW')}`,
+              message: `🧪 測試通知\n\nStock Dashboard 通知功能正常運作！\n\n時間: ${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`,
             }
           );
           results.push({
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
                   </div>
                   <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 10px 10px;">
                     <p>Stock Dashboard 的 Email 通知功能正常運作！</p>
-                    <p style="color: #666;">時間: ${new Date().toLocaleString('zh-TW')}</p>
+                    <p style="color: #666;">時間: ${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</p>
                   </div>
                 </div>
               `,
