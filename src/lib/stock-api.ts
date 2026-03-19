@@ -1,7 +1,14 @@
 import { PriceData, Market } from '@/types';
 
-// Fetch Taiwan stock price from TWSE
+// 安全解析數字，過濾 TWSE 常見的 "-" 空值
+function safeParseFloat(val: string | undefined): number {
+  if (!val || val === '-' || val === '') return NaN;
+  return parseFloat(val);
+}
+
+// Fetch Taiwan stock price from TWSE，失敗時 fallback 到 Yahoo Finance
 async function fetchTWStockPrice(symbol: string): Promise<PriceData | null> {
+  // 方案一：TWSE 即時報價 API
   try {
     const response = await fetch(
       `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_${symbol}.tw&json=1&delay=0`,
@@ -16,20 +23,76 @@ async function fetchTWStockPrice(symbol: string): Promise<PriceData | null> {
         { cache: 'no-store' }
       );
       const otcData = await otcResponse.json();
-      if (!otcData.msgArray || otcData.msgArray.length === 0) return null;
-      return parseTWStockData(otcData.msgArray[0]);
+      if (otcData.msgArray && otcData.msgArray.length > 0) {
+        const result = parseTWStockData(otcData.msgArray[0]);
+        if (result.currentPrice > 0) return result;
+      }
+    } else {
+      const result = parseTWStockData(data.msgArray[0]);
+      if (result.currentPrice > 0) return result;
     }
-
-    return parseTWStockData(data.msgArray[0]);
   } catch (error) {
-    console.error(`Error fetching TW stock ${symbol}:`, error);
-    return null;
+    console.error(`TWSE API failed for ${symbol}:`, error);
   }
+
+  // 方案二：Yahoo Finance（台股代碼需加 .TW 或 .TWO）
+  console.log(`[TW] Falling back to Yahoo Finance for ${symbol}`);
+  try {
+    const YahooFinance = (await import('yahoo-finance2')).default;
+    const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+
+    // 先試上市 (.TW)，再試上櫃 (.TWO)
+    for (const suffix of ['.TW', '.TWO']) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const quote: any = await yahooFinance.quote(`${symbol}${suffix}`);
+        if (quote && quote.regularMarketPrice) {
+          return {
+            symbol,
+            name: quote.shortName || quote.longName || symbol,
+            market: 'TW',
+            currentPrice: quote.regularMarketPrice || 0,
+            previousClose: quote.regularMarketPreviousClose || 0,
+            change: quote.regularMarketChange || 0,
+            changePercent: quote.regularMarketChangePercent || 0,
+            high: quote.regularMarketDayHigh || 0,
+            low: quote.regularMarketDayLow || 0,
+            volume: quote.regularMarketVolume || 0,
+            updatedAt: new Date(),
+          };
+        }
+      } catch {
+        // 繼續嘗試下一個 suffix
+      }
+    }
+  } catch (error) {
+    console.error(`Yahoo Finance fallback also failed for TW:${symbol}:`, error);
+  }
+
+  return null;
 }
 
 function parseTWStockData(data: Record<string, string>): PriceData {
-  const currentPrice = parseFloat(data.z) || parseFloat(data.y) || 0;
-  const previousClose = parseFloat(data.y) || 0;
+  // z=成交價, a=最佳五檔賣價(用第一個), b=最佳五檔買價(用第一個), y=昨收
+  const tradePrice = safeParseFloat(data.z);
+  const askPrice = safeParseFloat(data.a?.split('_')[0]);
+  const bidPrice = safeParseFloat(data.b?.split('_')[0]);
+  const previousClose = safeParseFloat(data.y) || 0;
+
+  // 優先取成交價，沒有就取買賣中間價，最後才用昨收
+  let currentPrice = 0;
+  if (!isNaN(tradePrice)) {
+    currentPrice = tradePrice;
+  } else if (!isNaN(askPrice) && !isNaN(bidPrice)) {
+    currentPrice = (askPrice + bidPrice) / 2;
+  } else if (!isNaN(askPrice)) {
+    currentPrice = askPrice;
+  } else if (!isNaN(bidPrice)) {
+    currentPrice = bidPrice;
+  } else {
+    currentPrice = previousClose;
+  }
+
   const change = currentPrice - previousClose;
   const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
 
@@ -41,8 +104,8 @@ function parseTWStockData(data: Record<string, string>): PriceData {
     previousClose,
     change,
     changePercent,
-    high: parseFloat(data.h) || 0,
-    low: parseFloat(data.l) || 0,
+    high: safeParseFloat(data.h) || currentPrice,
+    low: safeParseFloat(data.l) || currentPrice,
     volume: parseInt(data.v) || 0,
     updatedAt: new Date(),
   };

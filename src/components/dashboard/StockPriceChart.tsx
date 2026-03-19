@@ -178,8 +178,13 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
     );
   }
 
-  const minPrice = Math.min(...data.map((d) => d.low)) * 0.998;
-  const maxPrice = Math.max(...data.map((d) => d.high)) * 1.002;
+  const rawMin = Math.min(...data.map((d) => d.low));
+  const rawMax = Math.max(...data.map((d) => d.high));
+  const minPrice = rawMin * 0.998;
+  const maxPrice = rawMax * 1.002;
+  const priceRange = rawMax - rawMin;
+  // 價格範圍小時顯示更多小數位
+  const yDecimals = priceRange < 1 ? 2 : priceRange < 10 ? 1 : 0;
   const avgPrice = data.reduce((sum, d) => sum + d.close, 0) / data.length;
   const maxVolume = Math.max(...data.map((d) => d.volume));
 
@@ -261,7 +266,7 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
               tick={{ fontSize: 10, fill: '#9CA3AF' }}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(v: number) => v.toFixed(0)}
+              tickFormatter={(v: number) => v.toFixed(yDecimals)}
               width={60}
             />
             {/* 右側 Y 軸：成交量（隱藏刻度，只用來定位） */}
