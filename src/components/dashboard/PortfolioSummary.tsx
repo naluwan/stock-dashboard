@@ -58,6 +58,9 @@ export default function PortfolioSummary({ stocks, usdRate = 0, privacyMode, onT
   const stockPricePLPercent = totalCostTWD > 0 ? (stockPricePL / totalCostTWD) * 100 : 0;
   const fxPLPercent = totalCostTWD > 0 ? (fxPL / totalCostTWD) * 100 : 0;
 
+  // 加權平均買入匯率 = 美股台幣總成本 / 美股美元總成本
+  const avgPurchaseRate = usCost > 0 ? usCostTWD / usCost : 0;
+
   const cards = [
     // 第一排
     {
@@ -98,6 +101,7 @@ export default function PortfolioSummary({ stocks, usdRate = 0, privacyMode, onT
       title: '匯率損益',
       value: `NT$ ${formatNumber(fxPL, 0)}`,
       subtitle: formatPercent(fxPLPercent),
+      extra: avgPurchaseRate > 0 ? `平均成本 ${avgPurchaseRate.toFixed(2)} → 目前 ${usdRate.toFixed(2)}` : undefined,
       icon: fxPL >= 0 ? TrendingUp : TrendingDown,
       lightColor: fxPL >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-red-50 dark:bg-red-500/10',
       textColor: fxPL >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
@@ -145,6 +149,11 @@ export default function PortfolioSummary({ stocks, usdRate = 0, privacyMode, onT
                   {card.subtitle && (
                     <p className={`text-xs font-medium sm:text-sm ${card.textColor}`}>
                       {showMask ? '' : card.subtitle}
+                    </p>
+                  )}
+                  {card.extra && !showMask && (
+                    <p className="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+                      {card.extra}
                     </p>
                   )}
                 </div>
