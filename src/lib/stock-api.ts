@@ -5,7 +5,7 @@ async function fetchTWStockPrice(symbol: string): Promise<PriceData | null> {
   try {
     const response = await fetch(
       `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_${symbol}.tw&json=1&delay=0`,
-      { next: { revalidate: 30 } }
+      { cache: 'no-store' }
     );
     const data = await response.json();
 
@@ -13,7 +13,7 @@ async function fetchTWStockPrice(symbol: string): Promise<PriceData | null> {
       // Try OTC market
       const otcResponse = await fetch(
         `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_${symbol}.tw&json=1&delay=0`,
-        { next: { revalidate: 30 } }
+        { cache: 'no-store' }
       );
       const otcData = await otcResponse.json();
       if (!otcData.msgArray || otcData.msgArray.length === 0) return null;
