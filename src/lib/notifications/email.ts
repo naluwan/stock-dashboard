@@ -63,7 +63,7 @@ export function buildAlertEmailHTML(
       <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 10px 10px;">
         <h2 style="color: #333;">${stockName} (${stockSymbol})</h2>
         <div style="background: white; padding: 15px; border-radius: 8px; margin: 10px 0;">
-          <p style="margin: 5px 0;"><strong>目前價格:</strong> ${currentPrice} ${currency}</p>
+          <p style="margin: 5px 0;"><strong>目前價格:</strong> ${Number(currentPrice).toFixed(2)} ${currency}</p>
           <p style="margin: 5px 0;"><strong>觸發條件:</strong> ${typeLabels[alertType] || alertType}</p>
           <p style="margin: 5px 0;"><strong>市場:</strong> ${market === 'TW' ? '台股' : '美股'}</p>
           <p style="margin: 5px 0;"><strong>時間:</strong> ${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</p>
