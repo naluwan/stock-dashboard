@@ -139,11 +139,46 @@ async function fetchUSStockPrice(symbol: string): Promise<PriceData | null> {
     console.error(`yahoo-finance2 quote failed for ${symbol}, trying REST API:`, error);
   }
 
-  // 方案二：Yahoo Finance REST API 直接呼叫
+  // 方案二：Yahoo Finance v7 quote REST API（最直接的即時報價端點）
+  for (const host of ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']) {
+    try {
+      const url = `https://${host}/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        cache: 'no-store',
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const quote: any = data?.quoteResponse?.result?.[0];
+        if (quote && quote.regularMarketPrice) {
+          return {
+            symbol: quote.symbol || symbol,
+            name: quote.shortName || quote.longName || symbol,
+            market: 'US',
+            currentPrice: quote.regularMarketPrice || 0,
+            previousClose: quote.regularMarketPreviousClose || 0,
+            change: quote.regularMarketChange || 0,
+            changePercent: quote.regularMarketChangePercent || 0,
+            high: quote.regularMarketDayHigh || 0,
+            low: quote.regularMarketDayLow || 0,
+            volume: quote.regularMarketVolume || 0,
+            updatedAt: new Date(),
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`Yahoo v7 quote REST API failed on ${host} for ${symbol}:`, error);
+    }
+  }
+
+  // 方案三：Yahoo Finance v8 chart REST API（備用，改用 1 分鐘 K 線取即時報價）
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`;
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
+      cache: 'no-store',
     });
 
     if (res.ok) {
@@ -160,6 +195,7 @@ async function fetchUSStockPrice(symbol: string): Promise<PriceData | null> {
           lastIdx--;
         }
 
+        // 優先用 meta.regularMarketPrice（真正的即時現價），不要用 K 棒的 close
         const currentPrice = meta?.regularMarketPrice || (lastIdx >= 0 ? quotes?.close?.[lastIdx] : 0) || 0;
         const previousClose = meta?.chartPreviousClose || meta?.previousClose || 0;
         const change = currentPrice - previousClose;
@@ -173,15 +209,15 @@ async function fetchUSStockPrice(symbol: string): Promise<PriceData | null> {
           previousClose,
           change,
           changePercent,
-          high: lastIdx >= 0 ? (quotes?.high?.[lastIdx] || 0) : 0,
-          low: lastIdx >= 0 ? (quotes?.low?.[lastIdx] || 0) : 0,
+          high: meta?.regularMarketDayHigh || (lastIdx >= 0 ? (quotes?.high?.[lastIdx] || 0) : 0),
+          low: meta?.regularMarketDayLow || (lastIdx >= 0 ? (quotes?.low?.[lastIdx] || 0) : 0),
           volume: lastIdx >= 0 ? (quotes?.volume?.[lastIdx] || 0) : 0,
           updatedAt: new Date(),
         };
       }
     }
   } catch (error) {
-    console.error(`Yahoo REST API quote also failed for ${symbol}:`, error);
+    console.error(`Yahoo v8 chart REST API also failed for ${symbol}:`, error);
   }
 
   return null;
