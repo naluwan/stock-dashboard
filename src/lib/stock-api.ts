@@ -111,6 +111,49 @@ function parseTWStockData(data: Record<string, string>): PriceData {
   };
 }
 
+/**
+ * 從 Yahoo Finance quote 物件中取得最即時的價格
+ * 盤後 (postMarketPrice) → 盤前 (preMarketPrice) → 正規收盤 (regularMarketPrice)
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseYahooQuote(quote: any, symbol: string): PriceData {
+  const regularPrice = quote.regularMarketPrice || 0;
+  const previousClose = quote.regularMarketPreviousClose || 0;
+
+  // 判斷是否有延長交易時段的即時價格
+  const postPrice = quote.postMarketPrice || 0;
+  const prePrice = quote.preMarketPrice || 0;
+
+  // 優先取盤後價 → 盤前價 → 正規收盤價
+  let currentPrice = regularPrice;
+  let change = quote.regularMarketChange || 0;
+  let changePercent = quote.regularMarketChangePercent || 0;
+
+  if (postPrice > 0) {
+    currentPrice = postPrice;
+    change = postPrice - previousClose;
+    changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
+  } else if (prePrice > 0) {
+    currentPrice = prePrice;
+    change = prePrice - previousClose;
+    changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
+  }
+
+  return {
+    symbol: quote.symbol || symbol,
+    name: quote.shortName || quote.longName || symbol,
+    market: 'US',
+    currentPrice,
+    previousClose,
+    change,
+    changePercent,
+    high: quote.regularMarketDayHigh || 0,
+    low: quote.regularMarketDayLow || 0,
+    volume: quote.regularMarketVolume || 0,
+    updatedAt: new Date(),
+  };
+}
+
 // Fetch US stock price using Yahoo Finance (多層備援)
 async function fetchUSStockPrice(symbol: string): Promise<PriceData | null> {
   // 方案一：yahoo-finance2 npm 套件
@@ -121,19 +164,7 @@ async function fetchUSStockPrice(symbol: string): Promise<PriceData | null> {
     const quote: any = await yahooFinance.quote(symbol);
 
     if (quote && quote.regularMarketPrice) {
-      return {
-        symbol: quote.symbol || symbol,
-        name: quote.shortName || quote.longName || symbol,
-        market: 'US',
-        currentPrice: quote.regularMarketPrice || 0,
-        previousClose: quote.regularMarketPreviousClose || 0,
-        change: quote.regularMarketChange || 0,
-        changePercent: quote.regularMarketChangePercent || 0,
-        high: quote.regularMarketDayHigh || 0,
-        low: quote.regularMarketDayLow || 0,
-        volume: quote.regularMarketVolume || 0,
-        updatedAt: new Date(),
-      };
+      return parseYahooQuote(quote, symbol);
     }
   } catch (error) {
     console.error(`yahoo-finance2 quote failed for ${symbol}, trying REST API:`, error);
@@ -153,19 +184,7 @@ async function fetchUSStockPrice(symbol: string): Promise<PriceData | null> {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const quote: any = data?.quoteResponse?.result?.[0];
         if (quote && quote.regularMarketPrice) {
-          return {
-            symbol: quote.symbol || symbol,
-            name: quote.shortName || quote.longName || symbol,
-            market: 'US',
-            currentPrice: quote.regularMarketPrice || 0,
-            previousClose: quote.regularMarketPreviousClose || 0,
-            change: quote.regularMarketChange || 0,
-            changePercent: quote.regularMarketChangePercent || 0,
-            high: quote.regularMarketDayHigh || 0,
-            low: quote.regularMarketDayLow || 0,
-            volume: quote.regularMarketVolume || 0,
-            updatedAt: new Date(),
-          };
+          return parseYahooQuote(quote, symbol);
         }
       }
     } catch (error) {
@@ -195,9 +214,19 @@ async function fetchUSStockPrice(symbol: string): Promise<PriceData | null> {
           lastIdx--;
         }
 
-        // 優先用 meta.regularMarketPrice（真正的即時現價），不要用 K 棒的 close
-        const currentPrice = meta?.regularMarketPrice || (lastIdx >= 0 ? quotes?.close?.[lastIdx] : 0) || 0;
+        // 優先取盤後/盤前價，再取正規收盤價
+        const regularPrice = meta?.regularMarketPrice || (lastIdx >= 0 ? quotes?.close?.[lastIdx] : 0) || 0;
+        const postPrice = meta?.postMarketPrice || 0;
+        const prePrice = meta?.preMarketPrice || 0;
         const previousClose = meta?.chartPreviousClose || meta?.previousClose || 0;
+
+        let currentPrice = regularPrice;
+        if (postPrice > 0) {
+          currentPrice = postPrice;
+        } else if (prePrice > 0) {
+          currentPrice = prePrice;
+        }
+
         const change = currentPrice - previousClose;
         const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
 
