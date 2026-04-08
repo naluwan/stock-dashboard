@@ -159,7 +159,7 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
 
       {/* 賣出表單 */}
       <div className="space-y-3">
-        <div className={`grid grid-cols-2 gap-2 ${isUS ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <div className="flex items-center justify-between">
               <label className="text-xs text-gray-500 dark:text-gray-400">賣出股數</label>
