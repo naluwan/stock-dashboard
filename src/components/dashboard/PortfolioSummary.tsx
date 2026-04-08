@@ -1,8 +1,8 @@
 'use client';
 
-import { TrendingUp, TrendingDown, DollarSign, BarChart3, Eye, EyeOff } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, BarChart3, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
-import { formatNumber, formatPercent } from '@/lib/utils';
+import { formatNumber, formatPercent, calculateRealizedPL } from '@/lib/utils';
 
 interface PortfolioSummaryProps {
   stocks: StockWithCalculations[];
@@ -57,6 +57,12 @@ export default function PortfolioSummary({ stocks, usdRate = 0, privacyMode, onT
 
   const stockPricePLPercent = totalCostTWD > 0 ? (stockPricePL / totalCostTWD) * 100 : 0;
   const fxPLPercent = totalCostTWD > 0 ? (fxPL / totalCostTWD) * 100 : 0;
+
+  // 已實現損益（所有年度）
+  const totalRealizedPL = stocks.reduce((sum, s) => {
+    const pl = calculateRealizedPL(s.sales || []);
+    return sum + (s.market === 'US' && usdRate > 0 ? pl * usdRate : pl);
+  }, 0);
 
   // 加權平均買入匯率 = 美股台幣總成本 / 美股美元總成本
   const avgPurchaseRate = usCost > 0 ? usCostTWD / usCost : 0;
@@ -114,6 +120,15 @@ export default function PortfolioSummary({ stocks, usdRate = 0, privacyMode, onT
       icon: totalProfit >= 0 ? TrendingUp : TrendingDown,
       lightColor: totalProfit >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-red-50 dark:bg-red-500/10',
       textColor: totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+      sensitive: true,
+    },
+    // 第三排
+    {
+      title: '已實現損益',
+      value: `NT$ ${formatNumber(totalRealizedPL, 0)}`,
+      icon: totalRealizedPL >= 0 ? CheckCircle : TrendingDown,
+      lightColor: totalRealizedPL >= 0 ? 'bg-teal-50 dark:bg-teal-500/10' : 'bg-red-50 dark:bg-red-500/10',
+      textColor: totalRealizedPL >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-600 dark:text-red-400',
       sensitive: true,
     },
   ];

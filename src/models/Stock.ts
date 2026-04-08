@@ -11,12 +11,22 @@ const PurchaseSchema = new Schema({
   exchangeRate: { type: Number },
 });
 
+const SaleSchema = new Schema({
+  shares: { type: Number, required: true },
+  price: { type: Number, required: true },
+  date: { type: Date, required: true, default: Date.now },
+  note: { type: String },
+  exchangeRate: { type: Number },
+  avgCostAtSale: { type: Number, required: true },
+});
+
 const StockSchema = new Schema<StockDocument>(
   {
     symbol: { type: String, required: true, uppercase: true },
     name: { type: String, required: true },
     market: { type: String, enum: ['TW', 'US'], required: true },
     purchases: [PurchaseSchema],
+    sales: { type: [SaleSchema], default: [] },
     sortOrder: { type: Number, default: 0 },
   },
   {

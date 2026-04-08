@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit2, Trash2, TrendingUp, TrendingDown, GripVertical, ChevronDown } from 'lucide-react';
+import { Edit2, Trash2, TrendingUp, TrendingDown, GripVertical, ChevronDown, ArrowDownToLine } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
 import { formatCurrency, formatPercent, formatNumber, formatShares } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
@@ -13,6 +13,7 @@ interface StockTableProps {
   stocks: StockWithCalculations[];
   onEdit: (stock: StockWithCalculations) => void;
   onDelete: (id: string) => void;
+  onSell: (stock: StockWithCalculations) => void;
   usdRate?: number;
   privacyMode?: boolean;
 }
@@ -30,11 +31,12 @@ function TWDSub({ usd, rate }: { usd: number; rate: number }) {
 
 /* ─── 手機版：卡片 ─── */
 function SortableCard({
-  stock, onEdit, onDelete, usdRate, privacyMode, isExpanded, onToggleExpand,
+  stock, onEdit, onDelete, onSell, usdRate, privacyMode, isExpanded, onToggleExpand,
 }: {
   stock: StockWithCalculations;
   onEdit: (stock: StockWithCalculations) => void;
   onDelete: (id: string) => void;
+  onSell: (stock: StockWithCalculations) => void;
   usdRate: number;
   privacyMode: boolean;
   isExpanded: boolean;
@@ -70,6 +72,11 @@ function SortableCard({
             </button>
           </div>
           <div className="flex items-center gap-0.5">
+            {stock.totalShares > 0 && (
+              <button onClick={() => onSell(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-orange-50 hover:text-orange-500 dark:hover:bg-orange-900/30" title="賣出">
+                <ArrowDownToLine className="h-4 w-4" />
+              </button>
+            )}
             <button onClick={() => onEdit(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-900/30">
               <Edit2 className="h-4 w-4" />
             </button>
@@ -135,13 +142,23 @@ function SortableCard({
             )}
           </div>
           <div>
-            <p className="text-gray-400 dark:text-gray-500">損益</p>
+            <p className="text-gray-400 dark:text-gray-500">未實現損益</p>
             {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
               <p className={`font-semibold ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                 {stock.totalProfit !== undefined ? formatCurrency(stock.totalProfit, stock.market) : '-'}
               </p>
             )}
           </div>
+          {(stock.realizedPL !== undefined && stock.realizedPL !== 0) && (
+            <div>
+              <p className="text-gray-400 dark:text-gray-500">已實現損益</p>
+              {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
+                <p className={`font-semibold ${stock.realizedPL >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {formatCurrency(stock.realizedPL, stock.market)}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -161,11 +178,12 @@ function SortableCard({
 
 /* ─── 桌面版：表格列 ─── */
 function SortableRow({
-  stock, onEdit, onDelete, usdRate, privacyMode, isExpanded, onToggleExpand,
+  stock, onEdit, onDelete, onSell, usdRate, privacyMode, isExpanded, onToggleExpand,
 }: {
   stock: StockWithCalculations;
   onEdit: (stock: StockWithCalculations) => void;
   onDelete: (id: string) => void;
+  onSell: (stock: StockWithCalculations) => void;
   usdRate: number;
   privacyMode: boolean;
   isExpanded: boolean;
@@ -233,11 +251,21 @@ function SortableRow({
                 <span className="text-xs">({formatPercent(stock.totalProfitPercent || 0)})</span>
               </div>
               {isUS && stock.totalProfit !== undefined ? <TWDSub usd={stock.totalProfit} rate={usdRate} /> : null}
+              {stock.realizedPL !== undefined && stock.realizedPL !== 0 && (
+                <span className={`block text-[10px] mt-0.5 ${stock.realizedPL >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                  已實現 {formatCurrency(stock.realizedPL, stock.market)}
+                </span>
+              )}
             </>
           )}
         </td>
         <td className="px-4 py-3 text-right">
           <div className="flex items-center justify-end gap-1">
+            {stock.totalShares > 0 && (
+              <button onClick={() => onSell(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-orange-50 hover:text-orange-500 dark:hover:bg-orange-900/30" title="賣出">
+                <ArrowDownToLine className="h-4 w-4" />
+              </button>
+            )}
             <button onClick={() => onEdit(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-900/30">
               <Edit2 className="h-4 w-4" />
             </button>
@@ -260,7 +288,7 @@ function SortableRow({
 }
 
 /* ─── 主元件 ─── */
-export default function StockTable({ stocks, onEdit, onDelete, usdRate = 0, privacyMode = false }: StockTableProps) {
+export default function StockTable({ stocks, onEdit, onDelete, onSell, usdRate = 0, privacyMode = false }: StockTableProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const toggleExpand = (id: string) => {
@@ -289,6 +317,7 @@ export default function StockTable({ stocks, onEdit, onDelete, usdRate = 0, priv
               stock={stock}
               onEdit={onEdit}
               onDelete={onDelete}
+              onSell={onSell}
               usdRate={usdRate}
               privacyMode={privacyMode}
               isExpanded={expandedId === stock._id}
@@ -322,6 +351,7 @@ export default function StockTable({ stocks, onEdit, onDelete, usdRate = 0, priv
                   stock={stock}
                   onEdit={onEdit}
                   onDelete={onDelete}
+                  onSell={onSell}
                   usdRate={usdRate}
                   privacyMode={privacyMode}
                   isExpanded={expandedId === stock._id}

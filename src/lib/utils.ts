@@ -1,4 +1,4 @@
-import { Purchase, StockWithCalculations, IStock } from '@/types';
+import { Purchase, Sale, StockWithCalculations, IStock } from '@/types';
 
 export function calculateAveragePrice(purchases: Purchase[]): number {
   if (!purchases || purchases.length === 0) return 0;
@@ -8,9 +8,12 @@ export function calculateAveragePrice(purchases: Purchase[]): number {
   return totalCost / totalShares;
 }
 
-export function calculateTotalShares(purchases: Purchase[]): number {
+/** 持有股數 = 買入總股數 - 賣出總股數 */
+export function calculateTotalShares(purchases: Purchase[], sales?: Sale[]): number {
   if (!purchases || purchases.length === 0) return 0;
-  return purchases.reduce((sum, p) => sum + p.shares, 0);
+  const bought = purchases.reduce((sum, p) => sum + p.shares, 0);
+  const sold = sales ? sales.reduce((sum, s) => sum + s.shares, 0) : 0;
+  return bought - sold;
 }
 
 export function calculateTotalCost(purchases: Purchase[]): number {
@@ -18,16 +21,26 @@ export function calculateTotalCost(purchases: Purchase[]): number {
   return purchases.reduce((sum, p) => sum + p.shares * p.price, 0);
 }
 
+/** 計算已實現損益，可依年度篩選 */
+export function calculateRealizedPL(sales: Sale[], year?: number): number {
+  if (!sales || sales.length === 0) return 0;
+  const filtered = year
+    ? sales.filter(s => new Date(s.date).getFullYear() === year)
+    : sales;
+  return filtered.reduce((sum, s) => sum + (s.price - s.avgCostAtSale) * s.shares, 0);
+}
+
 export function enrichStockWithCalculations(stock: IStock, currentPrice?: number): StockWithCalculations {
   const averagePrice = calculateAveragePrice(stock.purchases);
-  const totalShares = calculateTotalShares(stock.purchases);
-  const totalCost = calculateTotalCost(stock.purchases);
+  const totalShares = calculateTotalShares(stock.purchases, stock.sales);
+  const totalCost = averagePrice * totalShares; // 持有部位的成本 = 均價 × 持有股數
 
   const result: StockWithCalculations = {
     ...stock,
     averagePrice,
     totalShares,
     totalCost,
+    realizedPL: calculateRealizedPL(stock.sales || []),
   };
 
   if (currentPrice !== undefined) {

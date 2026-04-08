@@ -50,11 +50,16 @@ export async function PUT(request: NextRequest) {
   try {
     await connectDB();
     const body = await request.json();
-    const { _id, name, purchases } = body;
+    const { _id, name, purchases, sales } = body;
+
+    const updateData: Record<string, unknown> = { name, purchases };
+    if (sales !== undefined) {
+      updateData.sales = sales;
+    }
 
     const stock = await Stock.findByIdAndUpdate(
       _id,
-      { name, purchases },
+      updateData,
       { returnDocument: 'after', runValidators: true }
     );
 

@@ -6,6 +6,7 @@ import PortfolioSummary from '@/components/dashboard/PortfolioSummary';
 import StockCard from '@/components/dashboard/StockCard';
 import AlertStatusPanel from '@/components/dashboard/AlertStatusPanel';
 import PriceChart from '@/components/dashboard/PriceChart';
+import YearlyPLReport from '@/components/dashboard/YearlyPLReport';
 import { StockWithCalculations, IAlert, IStock } from '@/types';
 import { enrichStockWithCalculations } from '@/lib/utils';
 import { Loader2, DollarSign } from 'lucide-react';
@@ -114,9 +115,10 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* 右側：圓餅圖 + 警報 */}
+          {/* 右側：圓餅圖 + 年度損益 + 警報 */}
           <div className="space-y-5">
             <PriceChart stocks={stocks} />
+            <YearlyPLReport stocks={stocks} usdRate={usdRate} privacyMode={privacyMode} />
             <AlertStatusPanel alerts={alerts} />
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Header from '@/components/layout/Header';
 import StockTable from '@/components/stocks/StockTable';
 import AddStockForm from '@/components/stocks/AddStockForm';
+import SellStockForm from '@/components/stocks/SellStockForm';
 import Modal from '@/components/ui/Modal';
 import { StockWithCalculations, IStock, Market, Purchase } from '@/types';
 import { enrichStockWithCalculations } from '@/lib/utils';
@@ -25,6 +26,7 @@ export default function StocksPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStock, setEditingStock] = useState<StockWithCalculations | null>(null);
+  const [sellingStock, setSellingStock] = useState<StockWithCalculations | null>(null);
   const [usdRate, setUsdRate] = useState(0);
   const [privacyMode, setPrivacyMode] = useState(true);
 
@@ -156,6 +158,30 @@ export default function StocksPage() {
     }
   };
 
+  const handleSellStock = async (data: {
+    stockId: string;
+    shares: number;
+    price: number;
+    date: string;
+    note?: string;
+    exchangeRate?: number;
+  }) => {
+    const res = await fetch('/api/stocks/sell', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (res.ok) {
+      toast.success('賣出成功');
+      setSellingStock(null);
+      fetchStocks();
+    } else {
+      const err = await res.json();
+      toast.error(err.error || '賣出失敗');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -208,6 +234,7 @@ export default function StocksPage() {
             stocks={stocks}
             onEdit={(stock) => setEditingStock(stock)}
             onDelete={handleDeleteStock}
+            onSell={(stock) => setSellingStock(stock)}
             usdRate={usdRate}
             privacyMode={privacyMode}
           />
@@ -240,6 +267,20 @@ export default function StocksPage() {
             }}
             onSubmit={handleEditStock}
             onCancel={() => setEditingStock(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={!!sellingStock}
+        onClose={() => setSellingStock(null)}
+        title="賣出股票"
+      >
+        {sellingStock && (
+          <SellStockForm
+            stock={sellingStock}
+            onSubmit={handleSellStock}
+            onCancel={() => setSellingStock(null)}
           />
         )}
       </Modal>

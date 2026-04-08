@@ -8,11 +8,11 @@ function safeParseFloat(val: string | undefined): number {
 
 // Fetch Taiwan stock price from TWSE，失敗時 fallback 到 Yahoo Finance
 async function fetchTWStockPrice(symbol: string): Promise<PriceData | null> {
-  // 方案一：TWSE 即時報價 API
+  // 方案一：TWSE 即時報價 API（設定 5 秒逾時，避免長時間等待）
   try {
     const response = await fetch(
       `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_${symbol}.tw&json=1&delay=0`,
-      { cache: 'no-store' }
+      { cache: 'no-store', signal: AbortSignal.timeout(5000) }
     );
     const data = await response.json();
 
@@ -20,7 +20,7 @@ async function fetchTWStockPrice(symbol: string): Promise<PriceData | null> {
       // Try OTC market
       const otcResponse = await fetch(
         `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_${symbol}.tw&json=1&delay=0`,
-        { cache: 'no-store' }
+        { cache: 'no-store', signal: AbortSignal.timeout(5000) }
       );
       const otcData = await otcResponse.json();
       if (otcData.msgArray && otcData.msgArray.length > 0) {
