@@ -158,15 +158,16 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
       </div>
 
       {/* 賣出表單 */}
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+      <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/50">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">賣出資訊</span>
+          <button type="button" onClick={sellAll} className="text-[10px] text-emerald-500 hover:text-emerald-600 font-medium">
+            全部賣出
+          </button>
+        </div>
+        <div className={`grid gap-2 ${isUS ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
           <div>
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-gray-500 dark:text-gray-400">賣出股數</label>
-              <button type="button" onClick={sellAll} className="text-[10px] text-emerald-500 hover:text-emerald-600">
-                全部賣出
-              </button>
-            </div>
+            <label className="text-xs text-gray-500 dark:text-gray-400">股數</label>
             <input
               type="text"
               inputMode="decimal"
@@ -227,8 +228,7 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
             </div>
           )}
         </div>
-
-        <div>
+        <div className="mt-2">
           <input
             type="text"
             value={noteInput}
