@@ -2,7 +2,7 @@
 
 import { Trash2, TrendingUp, TrendingDown } from 'lucide-react';
 import { StockWithCalculations, Sale } from '@/types';
-import { formatCurrency, formatNumber, formatShares } from '@/lib/utils';
+import { formatCurrency, formatAmount, formatNumber, formatShares } from '@/lib/utils';
 
 interface SellHistoryListProps {
   stock: StockWithCalculations;
@@ -50,7 +50,7 @@ export default function SellHistoryList({ stock, onDelete }: SellHistoryListProp
         <div className="mt-2 flex items-center justify-between text-xs">
           <span className="text-gray-500 dark:text-gray-400">共 {sales.length} 筆賣出</span>
           <span className={`font-semibold ${totalRealizedPL >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-            累計已實現損益 {formatCurrency(totalRealizedPL, stock.market)}
+            累計已實現損益 {formatAmount(totalRealizedPL, stock.market)}
           </span>
         </div>
       </div>
@@ -106,7 +106,7 @@ export default function SellHistoryList({ stock, onDelete }: SellHistoryListProp
                 <div>
                   <p className="text-gray-400">總金額</p>
                   <p className="font-semibold text-gray-900 dark:text-white">
-                    {formatCurrency(amount, stock.market)}
+                    {formatAmount(amount, stock.market)}
                   </p>
                 </div>
               </div>
@@ -116,7 +116,7 @@ export default function SellHistoryList({ stock, onDelete }: SellHistoryListProp
                 pl >= 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
               }`}>
                 {pl >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                <span>已實現 {formatCurrency(pl, stock.market)}</span>
+                <span>已實現 {formatAmount(pl, stock.market)}</span>
                 <span className="text-[10px]">({plPercent >= 0 ? '+' : ''}{plPercent.toFixed(2)}%)</span>
                 {isUS && sale.exchangeRate && (
                   <span className="ml-auto text-[10px] text-gray-400">

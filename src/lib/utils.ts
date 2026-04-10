@@ -62,6 +62,17 @@ export function formatCurrency(value: number, market: 'TW' | 'US'): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value);
 }
 
+/**
+ * 用於金額類數字（總金額、損益、市值等），不是單位價格。
+ * 台股顯示為整數（無小數），美股保留 2 位小數。
+ */
+export function formatAmount(value: number, market: 'TW' | 'US'): string {
+  if (market === 'TW') {
+    return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(value);
+  }
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value);
+}
+
 export function formatNumber(value: number, decimals: number = 2): string {
   return new Intl.NumberFormat('zh-TW', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 }

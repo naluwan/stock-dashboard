@@ -2,7 +2,7 @@
 
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
-import { formatCurrency, formatPercent, formatShares } from '@/lib/utils';
+import { formatCurrency, formatAmount, formatPercent, formatShares } from '@/lib/utils';
 
 interface StockCardProps {
   stock: StockWithCalculations;
@@ -74,7 +74,7 @@ export default function StockCard({ stock, usdRate = 0, privacyMode = false }: S
         <div>
           <p className="text-xs text-gray-500 dark:text-gray-400">未實現損益</p>
           <p className={`font-semibold ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-            {privacyMode ? MASK : (stock.totalProfit !== undefined ? formatCurrency(stock.totalProfit, stock.market) : '-')}
+            {privacyMode ? MASK : (stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-')}
           </p>
           {!privacyMode && isUS && stock.totalProfit !== undefined ? <TWDLine usd={stock.totalProfit} rate={usdRate} /> : null}
         </div>

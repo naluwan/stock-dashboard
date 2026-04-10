@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
-import { formatNumber, formatCurrency, calculateRealizedPL } from '@/lib/utils';
+import { formatNumber, formatAmount, calculateRealizedPL } from '@/lib/utils';
 
 interface YearlyPLReportProps {
   stocks: StockWithCalculations[];
@@ -143,7 +143,7 @@ export default function YearlyPLReport({ stocks, usdRate = 0, privacyMode = fals
                     <>
                       <div className={`flex items-center gap-1 text-sm font-medium ${s.realizedPL >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                         {s.realizedPL >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        {formatCurrency(s.realizedPL, s.market as 'TW' | 'US')}
+                        {formatAmount(s.realizedPL, s.market as 'TW' | 'US')}
                       </div>
                       <span className="text-[10px] text-gray-400">
                         {s.salesCount} 筆 / {s.totalSharesSold} 股

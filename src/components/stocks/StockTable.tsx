@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Edit2, Trash2, TrendingUp, TrendingDown, GripVertical, ChevronDown, ArrowDownToLine, History } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
-import { formatCurrency, formatPercent, formatNumber, formatShares } from '@/lib/utils';
+import { formatCurrency, formatAmount, formatPercent, formatNumber, formatShares } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -102,7 +102,7 @@ function SortableCard({
           ) : (
             <>
               {isProfit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              <span>{stock.totalProfit !== undefined ? formatCurrency(stock.totalProfit, stock.market) : '-'}</span>
+              <span>{stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-'}</span>
               <span className="text-xs">({formatPercent(stock.totalProfitPercent || 0)})</span>
               {isUS && stock.totalProfit !== undefined && usdRate > 0 && (
                 <span className="text-[10px] text-gray-400 ml-auto">≈ NT$ {formatNumber(stock.totalProfit * usdRate, 0)}</span>
@@ -134,7 +134,7 @@ function SortableCard({
             <p className="text-gray-400 dark:text-gray-500">投入成本</p>
             {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
               <>
-                <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(stock.totalCost, stock.market)}</p>
+                <p className="font-semibold text-gray-900 dark:text-white">{formatAmount(stock.totalCost, stock.market)}</p>
                 {isUS && twdCost > 0 && <span className="text-[10px] text-gray-400">≈ NT$ {formatNumber(twdCost, 0)}</span>}
               </>
             )}
@@ -143,7 +143,7 @@ function SortableCard({
             <p className="text-gray-400 dark:text-gray-500">目前市值</p>
             {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
               <>
-                <p className="font-semibold text-gray-900 dark:text-white">{stock.totalValue !== undefined ? formatCurrency(stock.totalValue, stock.market) : '-'}</p>
+                <p className="font-semibold text-gray-900 dark:text-white">{stock.totalValue !== undefined ? formatAmount(stock.totalValue, stock.market) : '-'}</p>
                 {isUS && stock.totalValue !== undefined ? <TWDSub usd={stock.totalValue} rate={usdRate} /> : null}
               </>
             )}
@@ -152,7 +152,7 @@ function SortableCard({
             <p className="text-gray-400 dark:text-gray-500">未實現損益</p>
             {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
               <p className={`font-semibold ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                {stock.totalProfit !== undefined ? formatCurrency(stock.totalProfit, stock.market) : '-'}
+                {stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-'}
               </p>
             )}
           </div>
@@ -161,7 +161,7 @@ function SortableCard({
               <p className="text-gray-400 dark:text-gray-500">已實現損益</p>
               {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
                 <p className={`font-semibold ${stock.realizedPL >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {formatCurrency(stock.realizedPL, stock.market)}
+                  {formatAmount(stock.realizedPL, stock.market)}
                 </p>
               )}
             </div>
@@ -234,7 +234,7 @@ function SortableRow({
         <td className="px-4 py-3 text-right">
           {privacyMode ? <span className="text-gray-400">{MASK}</span> : (
             <>
-              <span className="text-gray-700 dark:text-gray-300">{formatCurrency(stock.totalCost, stock.market)}</span>
+              <span className="text-gray-700 dark:text-gray-300">{formatAmount(stock.totalCost, stock.market)}</span>
               {isUS && (() => {
                 const twdCost = stock.purchases.reduce((sum, p) => sum + p.shares * p.price * (p.exchangeRate || usdRate), 0);
                 return twdCost > 0 ? <span className="block text-[10px] text-gray-400">≈ NT$ {formatNumber(twdCost, 0)}</span> : null;
@@ -245,7 +245,7 @@ function SortableRow({
         <td className="px-4 py-3 text-right">
           {privacyMode ? <span className="text-gray-400">{MASK}</span> : (
             <>
-              <span className="text-gray-700 dark:text-gray-300">{stock.totalValue !== undefined ? formatCurrency(stock.totalValue, stock.market) : '-'}</span>
+              <span className="text-gray-700 dark:text-gray-300">{stock.totalValue !== undefined ? formatAmount(stock.totalValue, stock.market) : '-'}</span>
               {isUS && stock.totalValue !== undefined ? <TWDSub usd={stock.totalValue} rate={usdRate} /> : null}
             </>
           )}
@@ -255,13 +255,13 @@ function SortableRow({
             <>
               <div className={`flex items-center justify-end gap-1 ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                 {isProfit ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                <span className="font-medium">{stock.totalProfit !== undefined ? formatCurrency(stock.totalProfit, stock.market) : '-'}</span>
+                <span className="font-medium">{stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-'}</span>
                 <span className="text-xs">({formatPercent(stock.totalProfitPercent || 0)})</span>
               </div>
               {isUS && stock.totalProfit !== undefined ? <TWDSub usd={stock.totalProfit} rate={usdRate} /> : null}
               {stock.realizedPL !== undefined && stock.realizedPL !== 0 && (
                 <span className={`block text-[10px] mt-0.5 ${stock.realizedPL >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                  已實現 {formatCurrency(stock.realizedPL, stock.market)}
+                  已實現 {formatAmount(stock.realizedPL, stock.market)}
                 </span>
               )}
             </>

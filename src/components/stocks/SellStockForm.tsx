@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { StockWithCalculations } from '@/types';
-import { formatCurrency, formatShares } from '@/lib/utils';
+import { formatCurrency, formatAmount, formatShares } from '@/lib/utils';
 
 interface SellStockFormProps {
   stock: StockWithCalculations;
@@ -245,7 +245,7 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
           estimatedPL >= 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
         }`}>
           <p className="font-medium">
-            預估已實現損益：{formatCurrency(estimatedPL, stock.market)}
+            預估已實現損益：{formatAmount(estimatedPL, stock.market)}
             <span className="ml-1 text-xs">
               ({stock.averagePrice > 0 ? ((estimatedPL / (stock.averagePrice * shares)) * 100).toFixed(2) : '0.00'}%)
             </span>
