@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit2, Trash2, TrendingUp, TrendingDown, GripVertical, ChevronDown, ArrowDownToLine } from 'lucide-react';
+import { Edit2, Trash2, TrendingUp, TrendingDown, GripVertical, ChevronDown, ArrowDownToLine, History } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
 import { formatCurrency, formatPercent, formatNumber, formatShares } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
@@ -14,6 +14,7 @@ interface StockTableProps {
   onEdit: (stock: StockWithCalculations) => void;
   onDelete: (id: string) => void;
   onSell: (stock: StockWithCalculations) => void;
+  onViewHistory: (stock: StockWithCalculations) => void;
   usdRate?: number;
   privacyMode?: boolean;
 }
@@ -31,12 +32,13 @@ function TWDSub({ usd, rate }: { usd: number; rate: number }) {
 
 /* ─── 手機版：卡片 ─── */
 function SortableCard({
-  stock, onEdit, onDelete, onSell, usdRate, privacyMode, isExpanded, onToggleExpand,
+  stock, onEdit, onDelete, onSell, onViewHistory, usdRate, privacyMode, isExpanded, onToggleExpand,
 }: {
   stock: StockWithCalculations;
   onEdit: (stock: StockWithCalculations) => void;
   onDelete: (id: string) => void;
   onSell: (stock: StockWithCalculations) => void;
+  onViewHistory: (stock: StockWithCalculations) => void;
   usdRate: number;
   privacyMode: boolean;
   isExpanded: boolean;
@@ -75,6 +77,11 @@ function SortableCard({
             {stock.totalShares > 0 && (
               <button onClick={() => onSell(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-orange-50 hover:text-orange-500 dark:hover:bg-orange-900/30" title="賣出">
                 <ArrowDownToLine className="h-4 w-4" />
+              </button>
+            )}
+            {(stock.sales && stock.sales.length > 0) && (
+              <button onClick={() => onViewHistory(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-teal-50 hover:text-teal-500 dark:hover:bg-teal-900/30" title="賣出歷史">
+                <History className="h-4 w-4" />
               </button>
             )}
             <button onClick={() => onEdit(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-900/30">
@@ -178,12 +185,13 @@ function SortableCard({
 
 /* ─── 桌面版：表格列 ─── */
 function SortableRow({
-  stock, onEdit, onDelete, onSell, usdRate, privacyMode, isExpanded, onToggleExpand,
+  stock, onEdit, onDelete, onSell, onViewHistory, usdRate, privacyMode, isExpanded, onToggleExpand,
 }: {
   stock: StockWithCalculations;
   onEdit: (stock: StockWithCalculations) => void;
   onDelete: (id: string) => void;
   onSell: (stock: StockWithCalculations) => void;
+  onViewHistory: (stock: StockWithCalculations) => void;
   usdRate: number;
   privacyMode: boolean;
   isExpanded: boolean;
@@ -266,6 +274,11 @@ function SortableRow({
                 <ArrowDownToLine className="h-4 w-4" />
               </button>
             )}
+            {(stock.sales && stock.sales.length > 0) && (
+              <button onClick={() => onViewHistory(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-teal-50 hover:text-teal-500 dark:hover:bg-teal-900/30" title="賣出歷史">
+                <History className="h-4 w-4" />
+              </button>
+            )}
             <button onClick={() => onEdit(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-900/30">
               <Edit2 className="h-4 w-4" />
             </button>
@@ -288,7 +301,7 @@ function SortableRow({
 }
 
 /* ─── 主元件 ─── */
-export default function StockTable({ stocks, onEdit, onDelete, onSell, usdRate = 0, privacyMode = false }: StockTableProps) {
+export default function StockTable({ stocks, onEdit, onDelete, onSell, onViewHistory, usdRate = 0, privacyMode = false }: StockTableProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const toggleExpand = (id: string) => {
@@ -318,6 +331,7 @@ export default function StockTable({ stocks, onEdit, onDelete, onSell, usdRate =
               onEdit={onEdit}
               onDelete={onDelete}
               onSell={onSell}
+              onViewHistory={onViewHistory}
               usdRate={usdRate}
               privacyMode={privacyMode}
               isExpanded={expandedId === stock._id}
@@ -352,6 +366,7 @@ export default function StockTable({ stocks, onEdit, onDelete, onSell, usdRate =
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onSell={onSell}
+                  onViewHistory={onViewHistory}
                   usdRate={usdRate}
                   privacyMode={privacyMode}
                   isExpanded={expandedId === stock._id}

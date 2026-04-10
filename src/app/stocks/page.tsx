@@ -5,6 +5,7 @@ import Header from '@/components/layout/Header';
 import StockTable from '@/components/stocks/StockTable';
 import AddStockForm from '@/components/stocks/AddStockForm';
 import SellStockForm from '@/components/stocks/SellStockForm';
+import SellHistoryList from '@/components/stocks/SellHistoryList';
 import Modal from '@/components/ui/Modal';
 import { StockWithCalculations, IStock, Market, Purchase } from '@/types';
 import { enrichStockWithCalculations } from '@/lib/utils';
@@ -27,6 +28,7 @@ export default function StocksPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStock, setEditingStock] = useState<StockWithCalculations | null>(null);
   const [sellingStock, setSellingStock] = useState<StockWithCalculations | null>(null);
+  const [historyStock, setHistoryStock] = useState<StockWithCalculations | null>(null);
   const [usdRate, setUsdRate] = useState(0);
   const [privacyMode, setPrivacyMode] = useState(true);
 
@@ -182,6 +184,31 @@ export default function StocksPage() {
     }
   };
 
+  const handleDeleteSale = async (saleId: string) => {
+    if (!historyStock?._id) return;
+    const confirmed = await confirmToast('確定要刪除此筆賣出紀錄嗎？');
+    if (!confirmed) return;
+
+    const res = await fetch(
+      `/api/stocks/sell?stockId=${historyStock._id}&saleId=${saleId}`,
+      { method: 'DELETE' }
+    );
+
+    if (res.ok) {
+      toast.success('已刪除賣出紀錄');
+      const updatedStock = await res.json();
+      // 更新本地 historyStock 以即時反映變化
+      setHistoryStock({
+        ...historyStock,
+        sales: updatedStock.sales,
+      });
+      fetchStocks();
+    } else {
+      const err = await res.json();
+      toast.error(err.error || '刪除失敗');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -235,6 +262,7 @@ export default function StocksPage() {
             onEdit={(stock) => setEditingStock(stock)}
             onDelete={handleDeleteStock}
             onSell={(stock) => setSellingStock(stock)}
+            onViewHistory={(stock) => setHistoryStock(stock)}
             usdRate={usdRate}
             privacyMode={privacyMode}
           />
@@ -281,6 +309,19 @@ export default function StocksPage() {
             stock={sellingStock}
             onSubmit={handleSellStock}
             onCancel={() => setSellingStock(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={!!historyStock}
+        onClose={() => setHistoryStock(null)}
+        title="賣出歷史"
+      >
+        {historyStock && (
+          <SellHistoryList
+            stock={historyStock}
+            onDelete={handleDeleteSale}
           />
         )}
       </Modal>

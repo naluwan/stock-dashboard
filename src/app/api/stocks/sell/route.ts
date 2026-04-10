@@ -3,6 +3,42 @@ import connectDB from '@/lib/mongodb';
 import Stock from '@/models/Stock';
 import { calculateAveragePrice } from '@/lib/utils';
 
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectDB();
+    const { searchParams } = new URL(request.url);
+    const stockId = searchParams.get('stockId');
+    const saleId = searchParams.get('saleId');
+
+    if (!stockId || !saleId) {
+      return NextResponse.json(
+        { error: '缺少 stockId 或 saleId' },
+        { status: 400 }
+      );
+    }
+
+    const stock = await Stock.findById(stockId);
+    if (!stock) {
+      return NextResponse.json({ error: '找不到該股票' }, { status: 404 });
+    }
+
+    const before = stock.sales.length;
+    stock.sales = stock.sales.filter(
+      (s: { _id: { toString: () => string } }) => s._id.toString() !== saleId
+    );
+
+    if (stock.sales.length === before) {
+      return NextResponse.json({ error: '找不到該賣出紀錄' }, { status: 404 });
+    }
+
+    await stock.save();
+    return NextResponse.json(stock.toObject());
+  } catch (error) {
+    console.error('DELETE /api/stocks/sell error:', error);
+    return NextResponse.json({ error: '刪除失敗' }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
