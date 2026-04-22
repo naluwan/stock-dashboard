@@ -22,11 +22,11 @@ export default function PortfolioSummary({ stocks, usdRate = 0, privacyMode, onT
   const twCost = stocks.filter(s => s.market === 'TW').reduce((sum, s) => sum + s.totalCost, 0);
   const usCost = stocks.filter(s => s.market === 'US').reduce((sum, s) => sum + s.totalCost, 0);
 
-  // 用每筆購買紀錄的匯率計算美股的台幣成本
+  // 用每筆購買紀錄的匯率計算美股的台幣成本（含手續費）
   const usCostTWD = stocks.filter(s => s.market === 'US').reduce((sum, s) => {
     return sum + s.purchases.reduce((pSum, p) => {
       const rate = p.exchangeRate || usdRate;
-      return pSum + p.shares * p.price * rate;
+      return pSum + (p.shares * p.price + (p.commission || 0)) * rate;
     }, 0);
   }, 0);
 
@@ -44,11 +44,11 @@ export default function PortfolioSummary({ stocks, usdRate = 0, privacyMode, onT
     const pl = (s.currentPrice - s.averagePrice) * s.totalShares;
     return sum + (s.market === 'US' && usdRate > 0 ? pl * usdRate : pl);
   }, 0);
-  // 匯率損益(TWD) = Σ 每筆美股購買: shares * price * (currentRate - purchaseRate)
+  // 匯率損益(TWD) = Σ 每筆美股購買: (shares * price + commission) * (currentRate - purchaseRate)
   const fxPL = stocks.filter(s => s.market === 'US').reduce((sum, s) => {
     return sum + s.purchases.reduce((pSum, p) => {
       const purchaseRate = p.exchangeRate || usdRate;
-      return pSum + p.shares * p.price * (usdRate - purchaseRate);
+      return pSum + (p.shares * p.price + (p.commission || 0)) * (usdRate - purchaseRate);
     }, 0);
   }, 0);
 
