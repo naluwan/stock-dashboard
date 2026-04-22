@@ -27,7 +27,7 @@ export default function SellHistoryList({ stock, onDelete }: SellHistoryListProp
   );
 
   const totalRealizedPL = sales.reduce(
-    (sum, s) => sum + (s.price - s.avgCostAtSale) * s.shares,
+    (sum, s) => sum + (s.price * s.shares - (s.commission || 0) - (s.tax || 0) - s.avgCostAtSale * s.shares),
     0
   );
 

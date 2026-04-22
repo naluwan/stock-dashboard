@@ -27,7 +27,7 @@ export default function YearlyPLReport({ stocks, usdRate = 0, privacyMode = fals
         sale => new Date(sale.date).getFullYear() === selectedYear
       );
       if (sales.length === 0) return null;
-      const pl = sales.reduce((sum, sale) => sum + (sale.price - sale.avgCostAtSale) * sale.shares, 0);
+      const pl = sales.reduce((sum, sale) => sum + (sale.price * sale.shares - (sale.commission || 0) - (sale.tax || 0) - sale.avgCostAtSale * sale.shares), 0);
       const totalShares = sales.reduce((sum, sale) => sum + sale.shares, 0);
       return {
         symbol: s.symbol,
