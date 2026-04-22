@@ -13,6 +13,8 @@ interface SellStockFormProps {
     date: string;
     note?: string;
     exchangeRate?: number;
+    commission?: number;
+    tax?: number;
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -30,6 +32,8 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
   const [dateInput, setDateInput] = useState(new Date().toISOString().split('T')[0]);
   const [noteInput, setNoteInput] = useState('');
   const [rateInput, setRateInput] = useState('');
+  const [commissionInput, setCommissionInput] = useState('');
+  const [taxInput, setTaxInput] = useState('');
   const [currentUsdRate, setCurrentUsdRate] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -90,8 +94,10 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
   };
 
   const shares = safeParseFloat(sharesInput);
+  const commission = safeParseFloat(commissionInput);
+  const tax = safeParseFloat(taxInput);
   const estimatedPL = shares > 0
-    ? (safeParseFloat(priceInput) - stock.averagePrice) * shares
+    ? (safeParseFloat(priceInput) - stock.averagePrice) * shares - commission - tax
     : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -109,12 +115,16 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
         date: string;
         note?: string;
         exchangeRate?: number;
+        commission?: number;
+        tax?: number;
       } = {
         stockId: stock._id!,
         shares,
         price: safeParseFloat(priceInput),
         date: dateInput,
         note: noteInput || undefined,
+        commission: commission > 0 ? commission : undefined,
+        tax: tax > 0 ? tax : undefined,
       };
 
       if (isUS) {
@@ -227,6 +237,30 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
               />
             </div>
           )}
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400">手續費</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={commissionInput}
+              onChange={(e) => setCommissionInput(e.target.value)}
+              placeholder="0"
+              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400">交易稅</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={taxInput}
+              onChange={(e) => setTaxInput(e.target.value)}
+              placeholder="0"
+              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
         </div>
         <div className="mt-2">
           <input

@@ -58,11 +58,12 @@ export default function SellHistoryList({ stock, onDelete }: SellHistoryListProp
       {/* 賣出明細 */}
       <div className="space-y-2 max-h-[60vh] overflow-y-auto">
         {sortedSales.map((sale: Sale) => {
-          const pl = (sale.price - sale.avgCostAtSale) * sale.shares;
-          const plPercent = sale.avgCostAtSale > 0
-            ? (pl / (sale.avgCostAtSale * sale.shares)) * 100
-            : 0;
+          const sellProceeds = sale.price * sale.shares - (sale.commission || 0) - (sale.tax || 0);
+          const buyCost = sale.avgCostAtSale * sale.shares;
+          const pl = sellProceeds - buyCost;
+          const plPercent = buyCost > 0 ? (pl / buyCost) * 100 : 0;
           const amount = sale.price * sale.shares;
+          const fees = (sale.commission || 0) + (sale.tax || 0);
 
           return (
             <div
@@ -110,6 +111,15 @@ export default function SellHistoryList({ stock, onDelete }: SellHistoryListProp
                   </p>
                 </div>
               </div>
+
+              {/* 手續費/交易稅 */}
+              {fees > 0 && (
+                <div className="mt-1.5 flex gap-3 text-[10px] text-gray-500 dark:text-gray-400">
+                  {(sale.commission || 0) > 0 && <span>手續費 {formatNumber(sale.commission || 0, 0)}</span>}
+                  {(sale.tax || 0) > 0 && <span>交易稅 {formatNumber(sale.tax || 0, 0)}</span>}
+                  <span>實收 {formatAmount(sellProceeds, stock.market)}</span>
+                </div>
+              )}
 
               {/* 損益 */}
               <div className={`mt-2 flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium ${

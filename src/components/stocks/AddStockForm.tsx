@@ -49,6 +49,7 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
     return d.toISOString().split('T')[0];
   }) || [new Date().toISOString().split('T')[0]];
   const initNotes = initialData?.purchases?.map((p) => p.note || '') || [''];
+  const initCommissions = initialData?.purchases?.map((p) => numToStr(p.commission)) || [''];
 
   const [sharesInputs, setSharesInputs] = useState<string[]>(initShares);
   const [priceInputs, setPriceInputs] = useState<string[]>(initPrices);
@@ -56,6 +57,7 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
   const [rateInputs, setRateInputs] = useState<string[]>(initRates);
   const [dateInputs, setDateInputs] = useState<string[]>(initDates);
   const [noteInputs, setNoteInputs] = useState<string[]>(initNotes);
+  const [commissionInputs, setCommissionInputs] = useState<string[]>(initCommissions);
 
   const [currentUsdRate, setCurrentUsdRate] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,6 +79,7 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
     setRateInputs([...rateInputs, '']);
     setDateInputs([...dateInputs, new Date().toISOString().split('T')[0]]);
     setNoteInputs([...noteInputs, '']);
+    setCommissionInputs([...commissionInputs, '']);
   };
 
   const removePurchase = (index: number) => {
@@ -88,6 +91,7 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
       setRateInputs(rateInputs.filter(remove));
       setDateInputs(dateInputs.filter(remove));
       setNoteInputs(noteInputs.filter(remove));
+      setCommissionInputs(commissionInputs.filter(remove));
     }
   };
 
@@ -145,6 +149,9 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
           date: new Date(dateInputs[i]),
           note: noteInputs[i] || undefined,
         };
+        // 手續費
+        const comm = safeParseFloat(commissionInputs[i]);
+        if (comm > 0) base.commission = comm;
         // 美股附加匯率：有填就用填的，沒填用當日匯率
         if (market === 'US') {
           const rate = safeParseFloat(rateInputs[i]);
@@ -306,14 +313,27 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
                   </div>
                 )}
               </div>
-              <div className="mt-2">
-                <input
-                  type="text"
-                  value={noteInputs[index]}
-                  onChange={(e) => setNoteInputs(updateAt(noteInputs, index, e.target.value))}
-                  placeholder="備註（選填）"
-                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-                />
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400">手續費</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={commissionInputs[index]}
+                    onChange={(e) => setCommissionInputs(updateAt(commissionInputs, index, e.target.value))}
+                    placeholder="0"
+                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    value={noteInputs[index]}
+                    onChange={(e) => setNoteInputs(updateAt(noteInputs, index, e.target.value))}
+                    placeholder="備註（選填）"
+                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none mt-5"
+                  />
+                </div>
               </div>
             </div>
           ))}

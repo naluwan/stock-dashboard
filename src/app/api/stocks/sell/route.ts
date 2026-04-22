@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const body = await request.json();
-    const { stockId, shares, price, date, note, exchangeRate } = body;
+    const { stockId, shares, price, date, note, exchangeRate, commission, tax } = body;
 
     if (!stockId || !shares || !price) {
       return NextResponse.json(
@@ -85,6 +85,8 @@ export async function POST(request: NextRequest) {
       note: note || '',
       exchangeRate: exchangeRate || undefined,
       avgCostAtSale,
+      commission: commission || 0,
+      tax: tax || 0,
     });
 
     await stock.save();

@@ -9,6 +9,7 @@ const PurchaseSchema = new Schema({
   date: { type: Date, required: true, default: Date.now },
   note: { type: String },
   exchangeRate: { type: Number },
+  commission: { type: Number, default: 0 },
 });
 
 const SaleSchema = new Schema({
@@ -18,6 +19,8 @@ const SaleSchema = new Schema({
   note: { type: String },
   exchangeRate: { type: Number },
   avgCostAtSale: { type: Number, required: true },
+  commission: { type: Number, default: 0 },
+  tax: { type: Number, default: 0 },
 });
 
 const StockSchema = new Schema<StockDocument>(

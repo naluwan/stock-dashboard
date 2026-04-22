@@ -1,8 +1,15 @@
 import { Purchase, Sale, StockWithCalculations, IStock } from '@/types';
 
+/**
+ * 計算含手續費的加權平均成本
+ * effectiveCost = (股價×股數 + 手續費) / 股數
+ */
 export function calculateAveragePrice(purchases: Purchase[]): number {
   if (!purchases || purchases.length === 0) return 0;
-  const totalCost = purchases.reduce((sum, p) => sum + p.shares * p.price, 0);
+  const totalCost = purchases.reduce(
+    (sum, p) => sum + p.shares * p.price + (p.commission || 0),
+    0
+  );
   const totalShares = purchases.reduce((sum, p) => sum + p.shares, 0);
   if (totalShares === 0) return 0;
   return totalCost / totalShares;
@@ -18,16 +25,24 @@ export function calculateTotalShares(purchases: Purchase[], sales?: Sale[]): num
 
 export function calculateTotalCost(purchases: Purchase[]): number {
   if (!purchases || purchases.length === 0) return 0;
-  return purchases.reduce((sum, p) => sum + p.shares * p.price, 0);
+  return purchases.reduce((sum, p) => sum + p.shares * p.price + (p.commission || 0), 0);
 }
 
-/** 計算已實現損益，可依年度篩選 */
+/**
+ * 計算已實現損益（含手續費+交易稅），可依年度篩選
+ * P&L = (賣出價×股數 - 賣出手續費 - 交易稅) - (平均成本×股數)
+ * 其中平均成本已含買入手續費
+ */
 export function calculateRealizedPL(sales: Sale[], year?: number): number {
   if (!sales || sales.length === 0) return 0;
   const filtered = year
     ? sales.filter(s => new Date(s.date).getFullYear() === year)
     : sales;
-  return filtered.reduce((sum, s) => sum + (s.price - s.avgCostAtSale) * s.shares, 0);
+  return filtered.reduce((sum, s) => {
+    const sellProceeds = s.price * s.shares - (s.commission || 0) - (s.tax || 0);
+    const buyCost = s.avgCostAtSale * s.shares;
+    return sum + (sellProceeds - buyCost);
+  }, 0);
 }
 
 export function enrichStockWithCalculations(stock: IStock, currentPrice?: number): StockWithCalculations {

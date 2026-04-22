@@ -7,6 +7,7 @@ export interface Purchase {
   date: Date;
   note?: string;
   exchangeRate?: number; // 買入時匯率（僅美股），用於計算台幣成本
+  commission?: number;   // 手續費
 }
 
 export interface Sale {
@@ -16,7 +17,9 @@ export interface Sale {
   date: Date;
   note?: string;
   exchangeRate?: number; // 賣出時匯率（僅美股）
-  avgCostAtSale: number; // 賣出當下的加權平均成本，鎖定不變
+  avgCostAtSale: number; // 賣出當下的加權平均成本（含買入手續費），鎖定不變
+  commission?: number;   // 賣出手續費
+  tax?: number;          // 交易稅
 }
 
 export interface IStock {
