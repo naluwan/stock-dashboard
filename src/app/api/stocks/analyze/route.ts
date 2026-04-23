@@ -58,117 +58,102 @@ function parseChartData(data: any): OHLCV[] {
   return candles;
 }
 
+interface PositionInfo {
+  averagePrice?: number;
+  totalShares?: number;
+  totalProfit?: number;
+  totalProfitPercent?: number;
+  currentPrice?: number;
+}
+
 function buildPrompt(
   symbol: string,
   name: string,
   market: Market,
-  indicators: ReturnType<typeof calculateIndicators>
+  indicators: ReturnType<typeof calculateIndicators>,
+  position?: PositionInfo
 ): string {
   const { macd, kd, bollinger } = indicators;
+  const currency = market === 'TW' ? 'NT$' : 'US$';
 
-  return `你是一位專業的股票技術分析師。請根據以下技術指標，使用多種投資策略來分析這檔股票，並給出綜合建議。
+  const positionSection = position?.totalShares && position.totalShares > 0
+    ? `
+## 我目前的持股狀況
+- 持有股數：${position.totalShares} 股
+- 平均買入成本：${currency} ${position.averagePrice?.toFixed(2)}
+- 目前股價：${currency} ${position.currentPrice?.toFixed(2)}
+- 目前損益：${currency} ${position.totalProfit?.toFixed(0)}（${position.totalProfitPercent?.toFixed(2)}%）
+- 狀態：${(position.totalProfit || 0) >= 0 ? '獲利中' : '虧損中'}
+`
+    : `
+## 我目前的持股狀況
+- 尚未持有此股票
+`;
+
+  return `你是一位說話直白的股票分析師朋友。我是一般散戶，不懂太多專業術語。請根據技術指標幫我分析這檔股票，用聊天的口氣告訴我該怎麼做。
 
 ## 股票資訊
 - 代碼：${symbol}（${name}）
 - 市場：${market === 'TW' ? '台股' : '美股'}
-- 目前價格：${indicators.currentPrice}
-- 漲跌：${indicators.change}（${indicators.changePercent}%）
+- 目前價格：${currency} ${indicators.currentPrice}
+- 今日漲跌：${indicators.change}（${indicators.changePercent}%）
+${positionSection}
+## 技術指標數據
 
-## 技術指標
-
-### 均線（Moving Average）
-- 5日均線：${indicators.sma5}
-- 10日均線：${indicators.sma10}
-- 20日均線：${indicators.sma20}
-- 60日均線：${indicators.sma60}
-- 120日均線：${indicators.sma120}
-- 股價 vs 20MA：${indicators.priceVsSma20}%
-- 股價 vs 60MA：${indicators.priceVsSma60}%
-
-### RSI（14日）
-- RSI：${indicators.rsi14}
-
-### MACD（12, 26, 9）
-- MACD 線：${macd.macd}
-- 訊號線：${macd.signal}
-- 柱狀圖：${macd.histogram}
-
-### KD 隨機指標（9, 3, 3）
-- K 值：${kd.k}
-- D 值：${kd.d}
-
-### 布林通道（20, 2）
-- 上軌：${bollinger.upper}
-- 中軌：${bollinger.middle}
-- 下軌：${bollinger.lower}
-- 帶寬：${bollinger.bandwidth}%
-
-### 成交量
-- 20日均量：${indicators.volumeAvg20}
-- 最新量：${indicators.volumeLatest}
-- 量比（最新/均量）：${indicators.volumeRatio}
-
-### 海龜交易法突破位
-- 20日最高：${indicators.high20}
-- 20日最低：${indicators.low20}
-- 60日最高：${indicators.high60}
-- 60日最低：${indicators.low60}
-
-### 近期報酬率
-- 5日：${indicators.return5d}%
-- 20日：${indicators.return20d}%
-- 60日：${indicators.return60d}%
-
-### 近5日走勢
-${indicators.recentCandles.map(c => `${c.date}：收${c.close}，量${c.volume}，漲跌${c.change}`).join('\n')}
+均線：5日=${indicators.sma5}, 10日=${indicators.sma10}, 20日=${indicators.sma20}, 60日=${indicators.sma60}, 120日=${indicators.sma120}
+股價距離20日均線：${indicators.priceVsSma20}%, 距離60日均線：${indicators.priceVsSma60}%
+RSI(14)：${indicators.rsi14}
+MACD：DIF=${macd.macd}, 訊號線=${macd.signal}, 柱狀圖=${macd.histogram}
+KD：K=${kd.k}, D=${kd.d}
+布林通道：上軌=${bollinger.upper}, 中軌=${bollinger.middle}, 下軌=${bollinger.lower}, 帶寬=${bollinger.bandwidth}%
+成交量：20日均量=${indicators.volumeAvg20}, 最新量=${indicators.volumeLatest}, 量比=${indicators.volumeRatio}
+20日高低：最高=${indicators.high20}, 最低=${indicators.low20}
+60日高低：最高=${indicators.high60}, 最低=${indicators.low60}
+近期報酬：5日=${indicators.return5d}%, 20日=${indicators.return20d}%, 60日=${indicators.return60d}%
+近5日：${indicators.recentCandles.map(c => `${c.date} 收${c.close} 量${c.volume}`).join(' / ')}
 
 ---
 
-## 請用以下策略逐一分析：
+## 請你幫我做以下分析，用白話文回答，不要用「偏多」「偏空」「減碼」這些術語：
 
-1. **均線策略**：判斷黃金交叉/死亡交叉、均線多空排列（5/10/20/60/120MA）
-2. **葛蘭碧八大法則**：根據股價與均線的相對位置判斷買賣時機
-3. **RSI 策略**：超買(>70)/超賣(<30)訊號，是否出現頂背離/底背離
-4. **MACD 策略**：趨勢動能、柱狀圖變化方向、零軸上下、是否出現背離
-5. **KD 隨機指標**：K/D 交叉方向、超買(>80)超賣(<20)、是否鈍化
-6. **布林通道策略**：股價在通道中的位置、是否觸及上/下軌、帶寬收斂或擴張
-7. **量價分析**：量增價漲/量縮價跌/量價背離判斷
-8. **海龜交易法**：是否突破 20 日 / 60 日高低點（突破買進/跌破賣出）
-9. **動能策略**：近期漲跌幅趨勢、是否出現加速或減速
-10. **支撐壓力**：根據均線、布林通道、近期高低點判斷關鍵價位
-11. **趨勢強度**：綜合均線排列、ADX概念、價格在通道中的位置判斷趨勢強弱
+請依據均線、RSI、MACD、KD、布林通道、成交量、海龜突破、動能、葛蘭碧法則、支撐壓力等策略來綜合分析。
 
-## 輸出格式（請嚴格按照以下格式回覆）：
+## 回答格式（請嚴格按照以下格式）：
 
-### 📊 各策略訊號
+### 📊 策略分析總表
 
-| 策略 | 訊號 | 說明 |
-|------|------|------|
-| 均線 | 偏多/偏空/中性 | 一句話說明 |
-| 葛蘭碧法則 | 偏多/偏空/中性 | 一句話說明 |
-| RSI | 偏多/偏空/中性 | 一句話說明 |
-| MACD | 偏多/偏空/中性 | 一句話說明 |
-| KD | 偏多/偏空/中性 | 一句話說明 |
-| 布林通道 | 偏多/偏空/中性 | 一句話說明 |
-| 量價 | 偏多/偏空/中性 | 一句話說明 |
-| 海龜突破 | 偏多/偏空/中性 | 一句話說明 |
-| 動能 | 偏多/偏空/中性 | 一句話說明 |
-| 趨勢強度 | 強/中/弱 | 一句話說明 |
+| 策略 | 結論 | 白話解釋 |
+|------|------|----------|
+| 均線 | 看漲/看跌/持平 | 用一句簡單的話解釋 |
+| RSI | 看漲/看跌/持平 | 用一句簡單的話解釋 |
+| MACD | 看漲/看跌/持平 | 用一句簡單的話解釋 |
+| KD | 看漲/看跌/持平 | 用一句簡單的話解釋 |
+| 布林通道 | 看漲/看跌/持平 | 用一句簡單的話解釋 |
+| 成交量 | 看漲/看跌/持平 | 用一句簡單的話解釋 |
+| 海龜突破 | 看漲/看跌/持平 | 用一句簡單的話解釋 |
+| 動能 | 看漲/看跌/持平 | 用一句簡單的話解釋 |
+| 葛蘭碧法則 | 看漲/看跌/持平 | 用一句簡單的話解釋 |
 
-### 🎯 綜合判斷
+### 🎯 我的結論
 
-**趨勢方向：** 偏多/中性/偏空
-**信心程度：** 強/中/弱
-**短線建議：** 一句話操作建議（例：可逢低布局 / 觀望為宜 / 考慮減碼）
+**接下來會漲還是跌？**
+直接告訴我短期（1-2週）和中期（1-3個月）的趨勢方向，用「會漲」「會跌」「不好說」來回答。
 
-### 📌 關鍵價位
-- 支撐位：___
-- 壓力位：___
-- 停損參考：___
+**現在可以買嗎？**
+${position?.totalShares && position.totalShares > 0
+    ? '我已經持有了，告訴我該繼續抱著、該賣掉、還是可以再加碼買更多。如果要加碼，建議在什麼價位買。'
+    : '我還沒買，告訴我現在適不適合進場，如果要買建議等到什麼價位再買。'}
 
-### 💡 補充說明
-2-3 句話的補充分析，提醒需要注意的風險或機會。
+### 💰 具體價位建議
 
+- **適合買進的價位：** ${currency} ___（跌到這個價再買比較安全）
+- **目標獲利價位：** ${currency} ___（漲到這裡可以考慮賣）
+- **停損價位：** ${currency} ___（跌破這裡就該跑了）
+
+### ⚠️ 要注意的事
+用 2-3 句話提醒我最重要的風險或機會，像朋友聊天一樣說。
+
+---
 ⚠️ 免責聲明：以上分析僅供參考，不構成投資建議。投資有風險，請自行判斷。`;
 }
 
@@ -179,7 +164,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '未設定 OPENAI_API_KEY' }, { status: 500 });
     }
 
-    const { symbol, name, market } = await request.json();
+    const { symbol, name, market, averagePrice, totalShares, totalProfit, totalProfitPercent, currentPrice } = await request.json();
     if (!symbol || !market) {
       return NextResponse.json({ error: '缺少 symbol 或 market' }, { status: 400 });
     }
@@ -192,7 +177,9 @@ export async function POST(request: NextRequest) {
 
     // 2. 計算技術指標
     const indicators = calculateIndicators(candles);
-    const prompt = buildPrompt(symbol, name || symbol, market as Market, indicators);
+    const prompt = buildPrompt(symbol, name || symbol, market as Market, indicators, {
+      averagePrice, totalShares, totalProfit, totalProfitPercent, currentPrice,
+    });
 
     // 3. 呼叫 OpenAI（直接用 fetch）
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -204,7 +191,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: '你是一位專業的台灣股票技術分析師，擅長使用多種技術指標和投資策略進行分析。請用繁體中文回答。' },
+          { role: 'system', content: '你是一位說話直白的台灣股票分析師，像朋友聊天一樣給建議。不要用專業術語，要用一般人聽得懂的話。請用繁體中文回答。' },
           { role: 'user', content: prompt },
         ],
         temperature: 0.3,

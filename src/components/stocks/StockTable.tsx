@@ -174,7 +174,7 @@ function SortableCard({
       {isExpanded && (
         <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-3">
           <StockPriceChart symbol={stock.symbol} market={stock.market} currentPrice={stock.currentPrice} />
-          <StockAnalysis symbol={stock.symbol} name={stock.name} market={stock.market} />
+          <StockAnalysis symbol={stock.symbol} name={stock.name} market={stock.market} averagePrice={stock.averagePrice} totalShares={stock.totalShares} totalProfit={stock.totalProfit} totalProfitPercent={stock.totalProfitPercent} currentPrice={stock.currentPrice} />
         </div>
       )}
     </div>
@@ -292,7 +292,7 @@ function SortableRow({
           <td colSpan={9} className="px-4 pb-4 pt-0">
             <div className="space-y-3">
               <StockPriceChart symbol={stock.symbol} market={stock.market} currentPrice={stock.currentPrice} />
-              <StockAnalysis symbol={stock.symbol} name={stock.name} market={stock.market} />
+              <StockAnalysis symbol={stock.symbol} name={stock.name} market={stock.market} averagePrice={stock.averagePrice} totalShares={stock.totalShares} totalProfit={stock.totalProfit} totalProfitPercent={stock.totalProfitPercent} currentPrice={stock.currentPrice} />
             </div>
           </td>
         </tr>

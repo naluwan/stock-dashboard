@@ -9,9 +9,14 @@ interface StockAnalysisProps {
   symbol: string;
   name: string;
   market: 'TW' | 'US';
+  averagePrice?: number;
+  totalShares?: number;
+  totalProfit?: number;
+  totalProfitPercent?: number;
+  currentPrice?: number;
 }
 
-export default function StockAnalysis({ symbol, name, market }: StockAnalysisProps) {
+export default function StockAnalysis({ symbol, name, market, averagePrice, totalShares, totalProfit, totalProfitPercent, currentPrice }: StockAnalysisProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +30,7 @@ export default function StockAnalysis({ symbol, name, market }: StockAnalysisPro
       const res = await fetch('/api/stocks/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, name, market }),
+        body: JSON.stringify({ symbol, name, market, averagePrice, totalShares, totalProfit, totalProfitPercent, currentPrice }),
       });
 
       const data = await res.json();
