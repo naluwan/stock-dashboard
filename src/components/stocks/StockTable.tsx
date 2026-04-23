@@ -8,6 +8,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import StockPriceChart from '@/components/dashboard/StockPriceChart';
+import StockAnalysis from '@/components/stocks/StockAnalysis';
 
 interface StockTableProps {
   stocks: StockWithCalculations[];
@@ -169,16 +170,13 @@ function SortableCard({
         </div>
       </div>
 
-      {/* 展開：走勢圖 */}
-      <div
-        className={`overflow-hidden transition-all duration-300 ease-in-out ${
-          isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
-        }`}
-      >
-        <div className="border-t border-gray-100 dark:border-gray-700 p-4">
+      {/* 展開：走勢圖 + AI 分析 */}
+      {isExpanded && (
+        <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-3">
           <StockPriceChart symbol={stock.symbol} market={stock.market} currentPrice={stock.currentPrice} />
+          <StockAnalysis symbol={stock.symbol} name={stock.name} market={stock.market} />
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -288,14 +286,17 @@ function SortableRow({
           </div>
         </td>
       </tr>
-      {/* 展開：走勢圖 */}
-      <tr className={`${isExpanded ? '' : 'hidden'}`}>
-        <td colSpan={9} className="px-4 pb-4 pt-0">
-          <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
-            <StockPriceChart symbol={stock.symbol} market={stock.market} currentPrice={stock.currentPrice} />
-          </div>
-        </td>
-      </tr>
+      {/* 展開：走勢圖 + AI 分析 */}
+      {isExpanded && (
+        <tr>
+          <td colSpan={9} className="px-4 pb-4 pt-0">
+            <div className="space-y-3">
+              <StockPriceChart symbol={stock.symbol} market={stock.market} currentPrice={stock.currentPrice} />
+              <StockAnalysis symbol={stock.symbol} name={stock.name} market={stock.market} />
+            </div>
+          </td>
+        </tr>
+      )}
     </>
   );
 }
