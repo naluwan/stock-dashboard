@@ -1,6 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Card,
+  Center,
+  Group,
+  Paper,
+  ScrollArea,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  UnstyledButton,
+} from '@mantine/core';
 import { Edit2, Trash2, TrendingUp, TrendingDown, GripVertical, ChevronDown, ArrowDownToLine, History } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
 import { formatCurrency, formatAmount, formatPercent, formatNumber, formatShares } from '@/lib/utils';
@@ -25,9 +40,53 @@ const MASK = '＊＊＊＊';
 function TWDSub({ usd, rate }: { usd: number; rate: number }) {
   if (rate <= 0) return null;
   return (
-    <span className="block text-[10px] text-gray-400">
+    <Text component="span" display="block" size="10px" c="dimmed">
       ≈ NT$ {formatNumber(usd * rate, 0)}
-    </span>
+    </Text>
+  );
+}
+
+function MarketBadge({ market }: { market: 'TW' | 'US' }) {
+  return (
+    <Badge size="xs" variant="light" color={market === 'TW' ? 'blue' : 'violet'} radius="xl">
+      {market}
+    </Badge>
+  );
+}
+
+function ActionButtons({
+  stock, onEdit, onDelete, onSell, onViewHistory,
+}: {
+  stock: StockWithCalculations;
+  onEdit: (stock: StockWithCalculations) => void;
+  onDelete: (id: string) => void;
+  onSell: (stock: StockWithCalculations) => void;
+  onViewHistory: (stock: StockWithCalculations) => void;
+}) {
+  return (
+    <Group gap={2} wrap="nowrap" justify="flex-end">
+      {stock.totalShares > 0 && (
+        <ActionIcon variant="subtle" color="orange" onClick={() => onSell(stock)} aria-label="賣出">
+          <ArrowDownToLine size={16} />
+        </ActionIcon>
+      )}
+      {stock.sales && stock.sales.length > 0 && (
+        <ActionIcon variant="subtle" color="teal" onClick={() => onViewHistory(stock)} aria-label="賣出歷史">
+          <History size={16} />
+        </ActionIcon>
+      )}
+      <ActionIcon variant="subtle" color="blue" onClick={() => onEdit(stock)} aria-label="編輯">
+        <Edit2 size={16} />
+      </ActionIcon>
+      <ActionIcon
+        variant="subtle"
+        color="red"
+        onClick={() => stock._id && onDelete(stock._id)}
+        aria-label="刪除"
+      >
+        <Trash2 size={16} />
+      </ActionIcon>
+    </Group>
   );
 }
 
@@ -46,138 +105,186 @@ function SortableCard({
   onToggleExpand: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stock._id! });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const };
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative' as const,
+  };
   const isProfit = (stock.totalProfit || 0) >= 0;
   const isUS = stock.market === 'US';
-
   const twdCost = isUS
     ? stock.purchases.reduce((sum, p) => sum + p.shares * p.price * (p.exchangeRate || usdRate), 0)
     : 0;
 
   return (
-    <div ref={setNodeRef} style={style} className={`rounded-xl bg-white shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 ${isDragging ? 'shadow-lg ring-2 ring-emerald-500/30' : ''}`}>
-      <div className="p-4">
-        {/* 頂部：拖拉 + 股票名稱 + 操作按鈕 */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <button {...attributes} {...listeners} className="cursor-grab touch-none rounded p-0.5 text-gray-300 active:cursor-grabbing dark:text-gray-600" aria-label="拖拉排序">
-              <GripVertical className="h-4 w-4" />
-            </button>
-            <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-              stock.market === 'TW' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-            }`}>
-              {stock.market}
-            </span>
-            <button onClick={onToggleExpand} className="flex items-center gap-1 hover:opacity-70 transition-opacity">
-              <span className="font-bold text-gray-900 dark:text-white">{stock.symbol}</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">{stock.name}</span>
-              <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-          <div className="flex items-center gap-0.5">
-            {stock.totalShares > 0 && (
-              <button onClick={() => onSell(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-orange-50 hover:text-orange-500 dark:hover:bg-orange-900/30" title="賣出">
-                <ArrowDownToLine className="h-4 w-4" />
-              </button>
-            )}
-            {(stock.sales && stock.sales.length > 0) && (
-              <button onClick={() => onViewHistory(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-teal-50 hover:text-teal-500 dark:hover:bg-teal-900/30" title="賣出歷史">
-                <History className="h-4 w-4" />
-              </button>
-            )}
-            <button onClick={() => onEdit(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-900/30">
-              <Edit2 className="h-4 w-4" />
-            </button>
-            <button onClick={() => stock._id && onDelete(stock._id)} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30">
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+    <Card
+      ref={setNodeRef}
+      style={style}
+      withBorder
+      radius="lg"
+      p={0}
+      shadow={isDragging ? 'md' : undefined}
+    >
+      <Box p="md">
+        <Group justify="space-between" mb="sm" wrap="nowrap">
+          <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+            <ActionIcon
+              {...attributes}
+              {...listeners}
+              variant="transparent"
+              color="gray"
+              size="sm"
+              style={{ cursor: 'grab', touchAction: 'none' }}
+              aria-label="拖拉排序"
+            >
+              <GripVertical size={14} />
+            </ActionIcon>
+            <MarketBadge market={stock.market} />
+            <UnstyledButton onClick={onToggleExpand} style={{ minWidth: 0, flex: 1 }}>
+              <Group gap={6} wrap="nowrap">
+                <Text fw={700} truncate>{stock.symbol}</Text>
+                <Text size="xs" c="dimmed" truncate>{stock.name}</Text>
+                <ChevronDown
+                  size={14}
+                  style={{
+                    color: 'var(--mantine-color-dimmed)',
+                    transform: isExpanded ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 0.2s',
+                    flexShrink: 0,
+                  }}
+                />
+              </Group>
+            </UnstyledButton>
+          </Group>
+          <ActionButtons
+            stock={stock}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onSell={onSell}
+            onViewHistory={onViewHistory}
+          />
+        </Group>
 
-        {/* 損益 badge */}
-        <div className={`mb-3 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium ${
-          isProfit ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
-        }`}>
+        <Paper
+          p="xs"
+          radius="md"
+          mb="sm"
+          bg={
+            isProfit
+              ? 'var(--mantine-color-teal-light)'
+              : 'var(--mantine-color-red-light)'
+          }
+        >
           {privacyMode ? (
-            <span>{MASK}</span>
+            <Text size="sm" fw={500} c="dimmed">{MASK}</Text>
           ) : (
-            <>
-              {isProfit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              <span>{stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-'}</span>
-              <span className="text-xs">({formatPercent(stock.totalProfitPercent || 0)})</span>
+            <Group gap={6} wrap="nowrap">
+              {isProfit ? <TrendingUp size={16} color="var(--mantine-color-teal-6)" /> : <TrendingDown size={16} color="var(--mantine-color-red-6)" />}
+              <Text size="sm" fw={500} c={isProfit ? 'teal' : 'red'}>
+                {stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-'}
+              </Text>
+              <Text size="xs" c={isProfit ? 'teal' : 'red'}>
+                ({formatPercent(stock.totalProfitPercent || 0)})
+              </Text>
               {isUS && stock.totalProfit !== undefined && usdRate > 0 && (
-                <span className="text-[10px] text-gray-400 ml-auto">≈ NT$ {formatNumber(stock.totalProfit * usdRate, 0)}</span>
+                <Text size="10px" c="dimmed" ml="auto">
+                  ≈ NT$ {formatNumber(stock.totalProfit * usdRate, 0)}
+                </Text>
               )}
-            </>
+            </Group>
           )}
-        </div>
+        </Paper>
 
-        {/* 資訊格 2x3 */}
-        <div className="grid grid-cols-3 gap-x-3 gap-y-2 text-xs">
+        <SimpleGrid cols={3} spacing="xs" verticalSpacing="xs">
           <div>
-            <p className="text-gray-400 dark:text-gray-500">目前價格</p>
-            <p className="font-semibold text-gray-900 dark:text-white">
+            <Text size="xs" c="dimmed">目前價格</Text>
+            <Text size="sm" fw={600}>
               {stock.currentPrice ? formatCurrency(stock.currentPrice, stock.market) : '-'}
-            </p>
+            </Text>
             {isUS && stock.currentPrice ? <TWDSub usd={stock.currentPrice} rate={usdRate} /> : null}
           </div>
           <div>
-            <p className="text-gray-400 dark:text-gray-500">平均成本</p>
-            <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(stock.averagePrice, stock.market)}</p>
+            <Text size="xs" c="dimmed">平均成本</Text>
+            <Text size="sm" fw={600}>{formatCurrency(stock.averagePrice, stock.market)}</Text>
             {isUS ? <TWDSub usd={stock.averagePrice} rate={usdRate} /> : null}
           </div>
           <div>
-            <p className="text-gray-400 dark:text-gray-500">股數</p>
-            <p className="font-semibold text-gray-900 dark:text-white">{formatShares(stock.totalShares, stock.market)}</p>
+            <Text size="xs" c="dimmed">股數</Text>
+            <Text size="sm" fw={600}>{formatShares(stock.totalShares, stock.market)}</Text>
           </div>
 
           <div>
-            <p className="text-gray-400 dark:text-gray-500">投入成本</p>
-            {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
+            <Text size="xs" c="dimmed">投入成本</Text>
+            {privacyMode ? (
+              <Text size="sm" fw={600} c="dimmed">{MASK}</Text>
+            ) : (
               <>
-                <p className="font-semibold text-gray-900 dark:text-white">{formatAmount(stock.totalCost, stock.market)}</p>
-                {isUS && twdCost > 0 && <span className="text-[10px] text-gray-400">≈ NT$ {formatNumber(twdCost, 0)}</span>}
+                <Text size="sm" fw={600}>{formatAmount(stock.totalCost, stock.market)}</Text>
+                {isUS && twdCost > 0 && (
+                  <Text component="span" display="block" size="10px" c="dimmed">
+                    ≈ NT$ {formatNumber(twdCost, 0)}
+                  </Text>
+                )}
               </>
             )}
           </div>
           <div>
-            <p className="text-gray-400 dark:text-gray-500">目前市值</p>
-            {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
+            <Text size="xs" c="dimmed">目前市值</Text>
+            {privacyMode ? (
+              <Text size="sm" fw={600} c="dimmed">{MASK}</Text>
+            ) : (
               <>
-                <p className="font-semibold text-gray-900 dark:text-white">{stock.totalValue !== undefined ? formatAmount(stock.totalValue, stock.market) : '-'}</p>
+                <Text size="sm" fw={600}>
+                  {stock.totalValue !== undefined ? formatAmount(stock.totalValue, stock.market) : '-'}
+                </Text>
                 {isUS && stock.totalValue !== undefined ? <TWDSub usd={stock.totalValue} rate={usdRate} /> : null}
               </>
             )}
           </div>
           <div>
-            <p className="text-gray-400 dark:text-gray-500">未實現損益</p>
-            {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
-              <p className={`font-semibold ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+            <Text size="xs" c="dimmed">未實現損益</Text>
+            {privacyMode ? (
+              <Text size="sm" fw={600} c="dimmed">{MASK}</Text>
+            ) : (
+              <Text size="sm" fw={600} c={isProfit ? 'teal' : 'red'}>
                 {stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-'}
-              </p>
+              </Text>
             )}
           </div>
-          {(stock.realizedPL !== undefined && stock.realizedPL !== 0) && (
+          {stock.realizedPL !== undefined && stock.realizedPL !== 0 && (
             <div>
-              <p className="text-gray-400 dark:text-gray-500">已實現損益</p>
-              {privacyMode ? <p className="font-semibold text-gray-400">{MASK}</p> : (
-                <p className={`font-semibold ${stock.realizedPL >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              <Text size="xs" c="dimmed">已實現損益</Text>
+              {privacyMode ? (
+                <Text size="sm" fw={600} c="dimmed">{MASK}</Text>
+              ) : (
+                <Text size="sm" fw={600} c={stock.realizedPL >= 0 ? 'teal' : 'red'}>
                   {formatAmount(stock.realizedPL, stock.market)}
-                </p>
+                </Text>
               )}
             </div>
           )}
-        </div>
-      </div>
+        </SimpleGrid>
+      </Box>
 
-      {/* 展開：走勢圖 + AI 分析 */}
       {isExpanded && (
-        <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-3">
-          <StockPriceChart symbol={stock.symbol} market={stock.market} currentPrice={stock.currentPrice} />
-          <StockAnalysis symbol={stock.symbol} name={stock.name} market={stock.market} averagePrice={stock.averagePrice} totalShares={stock.totalShares} totalProfit={stock.totalProfit} totalProfitPercent={stock.totalProfitPercent} currentPrice={stock.currentPrice} />
-        </div>
+        <Box p="md" pt={0} style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
+          <Stack gap="sm">
+            <StockPriceChart symbol={stock.symbol} market={stock.market} currentPrice={stock.currentPrice} />
+            <StockAnalysis
+              symbol={stock.symbol}
+              name={stock.name}
+              market={stock.market}
+              averagePrice={stock.averagePrice}
+              totalShares={stock.totalShares}
+              totalProfit={stock.totalProfit}
+              totalProfitPercent={stock.totalProfitPercent}
+              currentPrice={stock.currentPrice}
+            />
+          </Stack>
+        </Box>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -196,113 +303,158 @@ function SortableRow({
   onToggleExpand: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stock._id! });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 50 : undefined, position: 'relative' as const };
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : undefined,
+    position: 'relative' as const,
+  };
   const isProfit = (stock.totalProfit || 0) >= 0;
   const isUS = stock.market === 'US';
 
   return (
     <>
-      <tr ref={setNodeRef} style={style} className={`border-b border-gray-100 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50 ${isDragging ? 'bg-emerald-50 shadow-lg dark:bg-emerald-900/20' : ''}`}>
-        <td className="w-8 px-2 py-3">
-          <button {...attributes} {...listeners} className="cursor-grab touch-none rounded p-0.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600 dark:hover:text-gray-400" aria-label="拖拉排序">
-            <GripVertical className="h-4 w-4" />
-          </button>
-        </td>
-        <td className="px-4 py-3">
-          <button onClick={onToggleExpand} className="flex items-center gap-2 hover:opacity-70 transition-opacity text-left">
-            <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-              stock.market === 'TW' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-            }`}>{stock.market}</span>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">{stock.symbol}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{stock.name}</p>
-            </div>
-            <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-          </button>
-        </td>
-        <td className="px-4 py-3 text-right">
-          <span className="font-medium text-gray-900 dark:text-white">{stock.currentPrice ? formatCurrency(stock.currentPrice, stock.market) : '-'}</span>
+      <Table.Tr ref={setNodeRef} style={style} bg={isDragging ? 'var(--mantine-color-teal-light)' : undefined}>
+        <Table.Td style={{ width: 32 }}>
+          <ActionIcon
+            {...attributes}
+            {...listeners}
+            variant="transparent"
+            color="gray"
+            size="sm"
+            style={{ cursor: 'grab', touchAction: 'none' }}
+            aria-label="拖拉排序"
+          >
+            <GripVertical size={14} />
+          </ActionIcon>
+        </Table.Td>
+        <Table.Td>
+          <UnstyledButton onClick={onToggleExpand}>
+            <Group gap="xs" wrap="nowrap">
+              <MarketBadge market={stock.market} />
+              <div>
+                <Text fw={500} size="sm">{stock.symbol}</Text>
+                <Text size="xs" c="dimmed">{stock.name}</Text>
+              </div>
+              <ChevronDown
+                size={14}
+                style={{
+                  color: 'var(--mantine-color-dimmed)',
+                  transform: isExpanded ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s',
+                }}
+              />
+            </Group>
+          </UnstyledButton>
+        </Table.Td>
+        <Table.Td ta="right">
+          <Text fw={500} size="sm">
+            {stock.currentPrice ? formatCurrency(stock.currentPrice, stock.market) : '-'}
+          </Text>
           {isUS && stock.currentPrice ? <TWDSub usd={stock.currentPrice} rate={usdRate} /> : null}
-        </td>
-        <td className="px-4 py-3 text-right">
-          <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(stock.averagePrice, stock.market)}</span>
+        </Table.Td>
+        <Table.Td ta="right">
+          <Text fw={500} size="sm">{formatCurrency(stock.averagePrice, stock.market)}</Text>
           {isUS ? <TWDSub usd={stock.averagePrice} rate={usdRate} /> : null}
-        </td>
-        <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{formatShares(stock.totalShares, stock.market)}</td>
-        <td className="px-4 py-3 text-right">
-          {privacyMode ? <span className="text-gray-400">{MASK}</span> : (
+        </Table.Td>
+        <Table.Td ta="right">
+          <Text size="sm" c="dimmed">{formatShares(stock.totalShares, stock.market)}</Text>
+        </Table.Td>
+        <Table.Td ta="right">
+          {privacyMode ? (
+            <Text size="sm" c="dimmed">{MASK}</Text>
+          ) : (
             <>
-              <span className="text-gray-700 dark:text-gray-300">{formatAmount(stock.totalCost, stock.market)}</span>
+              <Text size="sm">{formatAmount(stock.totalCost, stock.market)}</Text>
               {isUS && (() => {
-                const twdCost = stock.purchases.reduce((sum, p) => sum + p.shares * p.price * (p.exchangeRate || usdRate), 0);
-                return twdCost > 0 ? <span className="block text-[10px] text-gray-400">≈ NT$ {formatNumber(twdCost, 0)}</span> : null;
+                const twdCost = stock.purchases.reduce(
+                  (sum, p) => sum + p.shares * p.price * (p.exchangeRate || usdRate),
+                  0,
+                );
+                return twdCost > 0 ? (
+                  <Text component="span" display="block" size="10px" c="dimmed">
+                    ≈ NT$ {formatNumber(twdCost, 0)}
+                  </Text>
+                ) : null;
               })()}
             </>
           )}
-        </td>
-        <td className="px-4 py-3 text-right">
-          {privacyMode ? <span className="text-gray-400">{MASK}</span> : (
+        </Table.Td>
+        <Table.Td ta="right">
+          {privacyMode ? (
+            <Text size="sm" c="dimmed">{MASK}</Text>
+          ) : (
             <>
-              <span className="text-gray-700 dark:text-gray-300">{stock.totalValue !== undefined ? formatAmount(stock.totalValue, stock.market) : '-'}</span>
+              <Text size="sm">
+                {stock.totalValue !== undefined ? formatAmount(stock.totalValue, stock.market) : '-'}
+              </Text>
               {isUS && stock.totalValue !== undefined ? <TWDSub usd={stock.totalValue} rate={usdRate} /> : null}
             </>
           )}
-        </td>
-        <td className="px-4 py-3 text-right">
-          {privacyMode ? <span className="text-gray-400">{MASK}</span> : (
+        </Table.Td>
+        <Table.Td ta="right">
+          {privacyMode ? (
+            <Text size="sm" c="dimmed">{MASK}</Text>
+          ) : (
             <>
-              <div className={`flex items-center justify-end gap-1 ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                {isProfit ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                <span className="font-medium">{stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-'}</span>
-                <span className="text-xs">({formatPercent(stock.totalProfitPercent || 0)})</span>
-              </div>
+              <Group gap={4} justify="flex-end" wrap="nowrap">
+                {isProfit
+                  ? <TrendingUp size={14} color="var(--mantine-color-teal-6)" />
+                  : <TrendingDown size={14} color="var(--mantine-color-red-6)" />
+                }
+                <Text size="sm" fw={500} c={isProfit ? 'teal' : 'red'}>
+                  {stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-'}
+                </Text>
+                <Text size="xs" c={isProfit ? 'teal' : 'red'}>
+                  ({formatPercent(stock.totalProfitPercent || 0)})
+                </Text>
+              </Group>
               {isUS && stock.totalProfit !== undefined ? <TWDSub usd={stock.totalProfit} rate={usdRate} /> : null}
               {stock.realizedPL !== undefined && stock.realizedPL !== 0 && (
-                <span className={`block text-[10px] mt-0.5 ${stock.realizedPL >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                <Text size="10px" c={stock.realizedPL >= 0 ? 'teal' : 'red'}>
                   已實現 {formatAmount(stock.realizedPL, stock.market)}
-                </span>
+                </Text>
               )}
             </>
           )}
-        </td>
-        <td className="px-4 py-3 text-right">
-          <div className="flex items-center justify-end gap-1">
-            {stock.totalShares > 0 && (
-              <button onClick={() => onSell(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-orange-50 hover:text-orange-500 dark:hover:bg-orange-900/30" title="賣出">
-                <ArrowDownToLine className="h-4 w-4" />
-              </button>
-            )}
-            {(stock.sales && stock.sales.length > 0) && (
-              <button onClick={() => onViewHistory(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-teal-50 hover:text-teal-500 dark:hover:bg-teal-900/30" title="賣出歷史">
-                <History className="h-4 w-4" />
-              </button>
-            )}
-            <button onClick={() => onEdit(stock)} className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-900/30">
-              <Edit2 className="h-4 w-4" />
-            </button>
-            <button onClick={() => stock._id && onDelete(stock._id)} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30">
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        </td>
-      </tr>
-      {/* 展開：走勢圖 + AI 分析 */}
+        </Table.Td>
+        <Table.Td ta="right">
+          <ActionButtons
+            stock={stock}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onSell={onSell}
+            onViewHistory={onViewHistory}
+          />
+        </Table.Td>
+      </Table.Tr>
       {isExpanded && (
-        <tr>
-          <td colSpan={9} className="px-4 pb-4 pt-0">
-            <div className="space-y-3">
+        <Table.Tr>
+          <Table.Td colSpan={9} p="md" pt={0}>
+            <Stack gap="sm">
               <StockPriceChart symbol={stock.symbol} market={stock.market} currentPrice={stock.currentPrice} />
-              <StockAnalysis symbol={stock.symbol} name={stock.name} market={stock.market} averagePrice={stock.averagePrice} totalShares={stock.totalShares} totalProfit={stock.totalProfit} totalProfitPercent={stock.totalProfitPercent} currentPrice={stock.currentPrice} />
-            </div>
-          </td>
-        </tr>
+              <StockAnalysis
+                symbol={stock.symbol}
+                name={stock.name}
+                market={stock.market}
+                averagePrice={stock.averagePrice}
+                totalShares={stock.totalShares}
+                totalProfit={stock.totalProfit}
+                totalProfitPercent={stock.totalProfitPercent}
+                currentPrice={stock.currentPrice}
+              />
+            </Stack>
+          </Table.Td>
+        </Table.Tr>
       )}
     </>
   );
 }
 
-/* ─── 主元件 ─── */
-export default function StockTable({ stocks, onEdit, onDelete, onSell, onViewHistory, usdRate = 0, privacyMode = false }: StockTableProps) {
+export default function StockTable({
+  stocks, onEdit, onDelete, onSell, onViewHistory, usdRate = 0, privacyMode = false,
+}: StockTableProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const toggleExpand = (id: string) => {
@@ -311,10 +463,14 @@ export default function StockTable({ stocks, onEdit, onDelete, onSell, onViewHis
 
   if (stocks.length === 0) {
     return (
-      <div className="rounded-xl bg-white p-12 text-center shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-        <p className="text-gray-400 text-lg">尚未新增任何持股</p>
-        <p className="text-gray-400 text-sm mt-1">點擊「新增持股」開始記錄你的投資組合</p>
-      </div>
+      <Card withBorder radius="lg" p="xl">
+        <Center>
+          <Stack gap={4} align="center">
+            <Text c="dimmed" size="lg">尚未新增任何持股</Text>
+            <Text c="dimmed" size="sm">點擊「新增持股」開始記錄你的投資組合</Text>
+          </Stack>
+        </Center>
+      </Card>
     );
   }
 
@@ -323,7 +479,7 @@ export default function StockTable({ stocks, onEdit, onDelete, onSell, onViewHis
   return (
     <>
       {/* 手機版：卡片列表 */}
-      <div className="space-y-3 lg:hidden">
+      <Stack gap="sm" hiddenFrom="lg">
         <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
           {stocks.map((stock) => (
             <SortableCard
@@ -340,44 +496,46 @@ export default function StockTable({ stocks, onEdit, onDelete, onSell, onViewHis
             />
           ))}
         </SortableContext>
-      </div>
+      </Stack>
 
       {/* 桌面版：表格 */}
-      <div className="hidden lg:block overflow-x-auto rounded-xl bg-white shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-200 dark:border-gray-700">
-              <th className="w-8 px-2 py-3"></th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase dark:text-gray-400">股票</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase dark:text-gray-400">目前價格</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase dark:text-gray-400">平均成本</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase dark:text-gray-400">股數</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase dark:text-gray-400">投入成本</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase dark:text-gray-400">目前市值</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase dark:text-gray-400">損益</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase dark:text-gray-400">操作</th>
-            </tr>
-          </thead>
-          <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-            <tbody>
-              {stocks.map((stock) => (
-                <SortableRow
-                  key={stock._id}
-                  stock={stock}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onSell={onSell}
-                  onViewHistory={onViewHistory}
-                  usdRate={usdRate}
-                  privacyMode={privacyMode}
-                  isExpanded={expandedId === stock._id}
-                  onToggleExpand={() => toggleExpand(stock._id!)}
-                />
-              ))}
-            </tbody>
-          </SortableContext>
-        </table>
-      </div>
+      <Card withBorder radius="lg" p={0} visibleFrom="lg">
+        <ScrollArea>
+          <Table verticalSpacing="sm" highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th style={{ width: 32 }} />
+                <Table.Th>股票</Table.Th>
+                <Table.Th ta="right">目前價格</Table.Th>
+                <Table.Th ta="right">平均成本</Table.Th>
+                <Table.Th ta="right">股數</Table.Th>
+                <Table.Th ta="right">投入成本</Table.Th>
+                <Table.Th ta="right">目前市值</Table.Th>
+                <Table.Th ta="right">損益</Table.Th>
+                <Table.Th ta="right">操作</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              <Table.Tbody>
+                {stocks.map((stock) => (
+                  <SortableRow
+                    key={stock._id}
+                    stock={stock}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onSell={onSell}
+                    onViewHistory={onViewHistory}
+                    usdRate={usdRate}
+                    privacyMode={privacyMode}
+                    isExpanded={expandedId === stock._id}
+                    onToggleExpand={() => toggleExpand(stock._id!)}
+                  />
+                ))}
+              </Table.Tbody>
+            </SortableContext>
+          </Table>
+        </ScrollArea>
+      </Card>
     </>
   );
 }

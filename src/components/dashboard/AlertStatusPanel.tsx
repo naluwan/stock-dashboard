@@ -1,5 +1,6 @@
 'use client';
 
+import { Alert, Card, Group, Paper, ScrollArea, Stack, Text, Title } from '@mantine/core';
 import { Bell, BellOff, AlertTriangle } from 'lucide-react';
 import { IAlert } from '@/types';
 
@@ -7,68 +8,75 @@ interface AlertStatusPanelProps {
   alerts: IAlert[];
 }
 
+const typeLabels: Record<string, string> = {
+  above_price: '高於價格',
+  below_price: '低於價格',
+  above_avg_percent: '高於均價%',
+  below_avg_percent: '低於均價%',
+};
+
 export default function AlertStatusPanel({ alerts }: AlertStatusPanelProps) {
   const activeAlerts = alerts.filter((a) => a.isActive);
   const recentTriggered = alerts.filter(
-    (a) => a.lastTriggered && new Date(a.lastTriggered).getTime() > Date.now() - 24 * 60 * 60 * 1000
+    (a) => a.lastTriggered && new Date(a.lastTriggered).getTime() > Date.now() - 24 * 60 * 60 * 1000,
   );
 
-  const typeLabels: Record<string, string> = {
-    above_price: '高於價格',
-    below_price: '低於價格',
-    above_avg_percent: '高於均價%',
-    below_avg_percent: '低於均價%',
-  };
-
   return (
-    <div className="rounded-xl bg-white p-5 shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white">價格警報</h3>
-        <span className="flex items-center gap-1 text-sm text-gray-500">
-          <Bell className="h-4 w-4" />
-          {activeAlerts.length} 個啟用中
-        </span>
-      </div>
+    <Card withBorder radius="lg" p="md">
+      <Group justify="space-between" mb="md">
+        <Title order={5}>價格警報</Title>
+        <Group gap={4}>
+          <Bell size={14} color="var(--mantine-color-dimmed)" />
+          <Text size="sm" c="dimmed">{activeAlerts.length} 個啟用中</Text>
+        </Group>
+      </Group>
 
       {recentTriggered.length > 0 && (
-        <div className="mb-4 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
-          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm font-medium">過去 24 小時有 {recentTriggered.length} 個警報被觸發</span>
-          </div>
-        </div>
+        <Alert
+          mb="sm"
+          color="yellow"
+          variant="light"
+          icon={<AlertTriangle size={16} />}
+          py="xs"
+        >
+          <Text size="sm" fw={500}>
+            過去 24 小時有 {recentTriggered.length} 個警報被觸發
+          </Text>
+        </Alert>
       )}
 
-      <div className="space-y-2 max-h-64 overflow-y-auto">
+      <ScrollArea.Autosize mah={260}>
         {alerts.length === 0 ? (
-          <p className="text-center text-sm text-gray-400 py-4">尚未設定任何警報</p>
+          <Text ta="center" size="sm" c="dimmed" py="md">尚未設定任何警報</Text>
         ) : (
-          alerts.slice(0, 5).map((alert) => (
-            <div
-              key={alert._id}
-              className={`flex items-center justify-between rounded-lg p-3 ${
-                alert.isActive
-                  ? 'bg-gray-50 dark:bg-gray-700/50'
-                  : 'bg-gray-50/50 opacity-50 dark:bg-gray-700/30'
-              }`}
-            >
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {alert.stockName} ({alert.stockSymbol})
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {typeLabels[alert.type]} {alert.targetValue}
-                </p>
-              </div>
-              {alert.isActive ? (
-                <Bell className="h-4 w-4 text-emerald-500" />
-              ) : (
-                <BellOff className="h-4 w-4 text-gray-400" />
-              )}
-            </div>
-          ))
+          <Stack gap="xs">
+            {alerts.slice(0, 5).map((alert) => (
+              <Paper
+                key={alert._id}
+                p="xs"
+                radius="md"
+                bg="var(--mantine-color-default-hover)"
+                opacity={alert.isActive ? 1 : 0.5}
+              >
+                <Group justify="space-between" wrap="nowrap">
+                  <div style={{ minWidth: 0 }}>
+                    <Text size="sm" fw={500} truncate>
+                      {alert.stockName} ({alert.stockSymbol})
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {typeLabels[alert.type]} {alert.targetValue}
+                    </Text>
+                  </div>
+                  {alert.isActive
+                    ? <Bell size={16} color="var(--mantine-color-teal-6)" />
+                    : <BellOff size={16} color="var(--mantine-color-dimmed)" />
+                  }
+                </Group>
+              </Paper>
+            ))}
+          </Stack>
         )}
-      </div>
-    </div>
+      </ScrollArea.Autosize>
+    </Card>
   );
 }

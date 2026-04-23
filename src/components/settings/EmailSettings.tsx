@@ -1,6 +1,21 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  ActionIcon,
+  Badge,
+  Button,
+  Card,
+  Group,
+  NumberInput,
+  PasswordInput,
+  SimpleGrid,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+  ThemeIcon,
+} from '@mantine/core';
 import { Plus, Trash2, Save, Mail } from 'lucide-react';
 
 interface EmailSettingsProps {
@@ -41,113 +56,114 @@ export default function EmailSettings({ config: initialConfig, onSave }: EmailSe
   };
 
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-blue-50 p-2 dark:bg-blue-900/20">
-            <Mail className="h-5 w-5 text-blue-500" />
-          </div>
+    <Card withBorder radius="lg" p="lg">
+      <Group justify="space-between" mb="lg" wrap="nowrap">
+        <Group gap="sm">
+          <ThemeIcon color="blue" variant="light" size="lg" radius="md">
+            <Mail size={20} />
+          </ThemeIcon>
           <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Email 通知設定</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">設定 SMTP 伺服器和收件人</p>
+            <Text fw={700} size="lg">Email 通知設定</Text>
+            <Text size="sm" c="dimmed">設定 SMTP 伺服器和收件人</Text>
           </div>
-        </div>
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={config.enabled}
-            onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
-            className="sr-only peer"
-          />
-          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-500"></div>
-        </label>
-      </div>
+        </Group>
+        <Switch
+          checked={config.enabled}
+          onChange={(e) => setConfig({ ...config, enabled: e.currentTarget.checked })}
+          color="teal"
+        />
+      </Group>
 
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP 伺服器</label>
-            <input
-              type="text"
-              value={config.smtpHost}
-              onChange={(e) => setConfig({ ...config, smtpHost: e.target.value })}
-              placeholder="smtp.gmail.com"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP 連接埠</label>
-            <input
-              type="number"
-              value={config.smtpPort}
-              onChange={(e) => setConfig({ ...config, smtpPort: parseInt(e.target.value) || 587 })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">帳號</label>
-            <input
-              type="text"
-              value={config.smtpUser}
-              onChange={(e) => setConfig({ ...config, smtpUser: e.target.value })}
-              placeholder="your-email@gmail.com"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">密碼/應用程式密碼</label>
-            <input
-              type="password"
-              value={config.smtpPass}
-              onChange={(e) => setConfig({ ...config, smtpPass: e.target.value })}
-              placeholder="••••••••"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-        </div>
+      <Stack gap="md">
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+          <TextInput
+            label="SMTP 伺服器"
+            placeholder="smtp.gmail.com"
+            value={config.smtpHost}
+            onChange={(e) => setConfig({ ...config, smtpHost: e.currentTarget.value })}
+          />
+          <NumberInput
+            label="SMTP 連接埠"
+            value={config.smtpPort}
+            onChange={(v) => setConfig({ ...config, smtpPort: typeof v === 'number' ? v : 587 })}
+            min={1}
+            max={65535}
+            hideControls
+          />
+        </SimpleGrid>
+
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+          <TextInput
+            label="帳號"
+            placeholder="your-email@gmail.com"
+            value={config.smtpUser}
+            onChange={(e) => setConfig({ ...config, smtpUser: e.currentTarget.value })}
+          />
+          <PasswordInput
+            label="密碼 / 應用程式密碼"
+            placeholder="••••••••"
+            value={config.smtpPass}
+            onChange={(e) => setConfig({ ...config, smtpPass: e.currentTarget.value })}
+          />
+        </SimpleGrid>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">收件人</label>
-          <div className="flex gap-2">
-            <input
+          <Text size="sm" fw={500} mb={6}>收件人</Text>
+          <Group gap="xs" wrap="nowrap">
+            <TextInput
+              flex={1}
               type="email"
-              value={newRecipient}
-              onChange={(e) => setNewRecipient(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRecipient())}
               placeholder="email@example.com"
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
+              value={newRecipient}
+              onChange={(e) => setNewRecipient(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addRecipient();
+                }
+              }}
             />
-            <button
-              type="button"
-              onClick={addRecipient}
-              className="rounded-lg bg-blue-500 px-3 py-2 text-white hover:bg-blue-600"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {config.recipients.map((email) => (
-              <span key={email} className="flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                {email}
-                <button onClick={() => removeRecipient(email)} className="text-blue-400 hover:text-blue-600">
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-          </div>
+            <ActionIcon size="lg" color="blue" onClick={addRecipient} variant="filled">
+              <Plus size={16} />
+            </ActionIcon>
+          </Group>
+          {config.recipients.length > 0 && (
+            <Group gap="xs" mt="xs">
+              {config.recipients.map((email) => (
+                <Badge
+                  key={email}
+                  size="lg"
+                  variant="light"
+                  color="blue"
+                  rightSection={
+                    <ActionIcon
+                      size="xs"
+                      color="blue"
+                      variant="transparent"
+                      onClick={() => removeRecipient(email)}
+                    >
+                      <Trash2 size={12} />
+                    </ActionIcon>
+                  }
+                  pr={4}
+                >
+                  {email}
+                </Badge>
+              ))}
+            </Group>
+          )}
         </div>
-      </div>
+      </Stack>
 
-      <button
+      <Button
+        mt="lg"
+        color="teal"
+        leftSection={<Save size={16} />}
+        loading={isSaving}
         onClick={handleSave}
-        disabled={isSaving}
-        className="mt-6 flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
       >
-        <Save className="h-4 w-4" />
-        {isSaving ? '儲存中...' : '儲存設定'}
-      </button>
-    </div>
+        儲存設定
+      </Button>
+    </Card>
   );
 }

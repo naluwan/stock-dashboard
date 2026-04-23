@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Alert, Button, Center, Group, Loader, Modal, Stack, Text } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import Header from '@/components/layout/Header';
 import AlertForm from '@/components/alerts/AlertForm';
 import AlertList from '@/components/alerts/AlertList';
-import Modal from '@/components/ui/Modal';
 import { IAlert, IStock, AlertType, Market } from '@/types';
-import { Plus, Loader2, Zap } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Plus, Zap } from 'lucide-react';
 import { confirmToast } from '@/lib/confirmToast';
 
 export default function AlertsPage() {
@@ -77,10 +77,10 @@ export default function AlertsPage() {
     if (!confirmed) return;
     const res = await fetch(`/api/alerts?id=${id}`, { method: 'DELETE' });
     if (res.ok) {
-      toast.success('已刪除警報');
+      notifications.show({ message: '已刪除警報', color: 'green' });
       fetchData();
     } else {
-      toast.error('刪除失敗，請稍後再試');
+      notifications.show({ message: '刪除失敗，請稍後再試', color: 'red' });
     }
   };
 
@@ -124,9 +124,9 @@ export default function AlertsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-      </div>
+      <Center h="100vh">
+        <Loader color="teal" />
+      </Center>
     );
   }
 
@@ -134,50 +134,44 @@ export default function AlertsPage() {
     <div>
       <Header title="價格警報" subtitle="設定股票價格通知條件" onRefresh={fetchData} />
 
-      <div className="p-4 sm:p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+      <Stack p={{ base: 'md', sm: 'xl' }} gap="md">
+        <Group justify="space-between" wrap="wrap" gap="sm">
           <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <Text size="sm" c="dimmed">
               共 {alerts.length} 個警報，{alerts.filter((a) => a.isActive).length} 個啟用中
-            </p>
-            {lastCheckResult && (
-              <p className="text-xs text-gray-400 mt-1">{lastCheckResult}</p>
-            )}
+            </Text>
+            {lastCheckResult && <Text size="xs" c="dimmed" mt={4}>{lastCheckResult}</Text>}
           </div>
-          <div className="flex gap-2">
-            <button
+          <Group gap="xs">
+            <Button
+              variant="default"
+              leftSection={isChecking ? <Loader size="xs" /> : <Zap size={16} />}
               onClick={handleManualCheck}
               disabled={isChecking || alerts.filter((a) => a.isActive).length === 0}
-              className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
-              {isChecking ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Zap className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">立即檢查</span>
-              <span className="sm:hidden">檢查</span>
-            </button>
-            <button
+              立即檢查
+            </Button>
+            <Button
+              color="teal"
+              leftSection={<Plus size={16} />}
               onClick={() => setShowAddModal(true)}
               disabled={stocks.length === 0}
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50 sm:flex-none"
             >
-              <Plus className="h-4 w-4" />
               新增警報
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Group>
+        </Group>
 
-        {/* 排程說明 */}
-        <div className="mb-4 rounded-lg bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
-          <p>系統每 5 分鐘自動檢查一次警報。台股在交易時段（08:30–13:45）檢查，美股在含盤前盤後的交易時段（約台灣時間 15:00–隔日 09:00）檢查。同一警報 30 分鐘內不會重複觸發。</p>
-        </div>
+        <Alert color="blue" variant="light" py="xs">
+          <Text size="xs">
+            系統每 5 分鐘自動檢查一次警報。台股在交易時段（08:30–13:45）檢查，美股在含盤前盤後的交易時段（約台灣時間 15:00–隔日 09:00）檢查。同一警報 30 分鐘內不會重複觸發。
+          </Text>
+        </Alert>
 
         {stocks.length === 0 && (
-          <div className="mb-4 rounded-lg bg-amber-50 p-3 sm:p-4 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+          <Alert color="yellow" variant="light">
             請先在「持股管理」新增持股，才能設定價格警報
-          </div>
+          </Alert>
         )}
 
         <AlertList
@@ -186,12 +180,14 @@ export default function AlertsPage() {
           onDelete={handleDeleteAlert}
           onResetCount={handleResetCount}
         />
-      </div>
+      </Stack>
 
       <Modal
-        isOpen={showAddModal}
+        opened={showAddModal}
         onClose={() => setShowAddModal(false)}
         title="新增價格警報"
+        size="lg"
+        centered
       >
         <AlertForm
           stocks={stocks}

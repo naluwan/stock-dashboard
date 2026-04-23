@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Box, Card, Center, Group, Loader, SimpleGrid, Stack, Text } from '@mantine/core';
+import { DollarSign } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import PortfolioSummary from '@/components/dashboard/PortfolioSummary';
 import StockCard from '@/components/dashboard/StockCard';
@@ -9,14 +11,13 @@ import PriceChart from '@/components/dashboard/PriceChart';
 import YearlyPLReport from '@/components/dashboard/YearlyPLReport';
 import { StockWithCalculations, IAlert, IStock } from '@/types';
 import { enrichStockWithCalculations } from '@/lib/utils';
-import { Loader2, DollarSign } from 'lucide-react';
 
 export default function DashboardPage() {
   const [stocks, setStocks] = useState<StockWithCalculations[]>([]);
   const [alerts, setAlerts] = useState<IAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [usdRate, setUsdRate] = useState(0);
-  const [privacyMode, setPrivacyMode] = useState(true); // 預設隱藏
+  const [privacyMode, setPrivacyMode] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
@@ -37,7 +38,7 @@ export default function DashboardPage() {
       if (stocksData.length > 0) {
         try {
           const symbolsParam = JSON.stringify(
-            stocksData.map((s) => ({ symbol: s.symbol, market: s.market }))
+            stocksData.map((s) => ({ symbol: s.symbol, market: s.market })),
           );
           const pricesRes = await fetch(`/api/prices?symbols=${encodeURIComponent(symbolsParam)}`);
           const pricesData = await pricesRes.json();
@@ -70,26 +71,26 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-      </div>
+      <Center h="100vh">
+        <Loader color="teal" />
+      </Center>
     );
   }
 
   return (
-    <div className="flex flex-col">
+    <div>
       <Header title="投資組合總覽" subtitle="即時監控你的股票投資" onRefresh={fetchData} />
 
-      <div className="p-4 space-y-5 sm:p-6">
-        {/* 匯率資訊 */}
+      <Stack gap="lg" p={{ base: 'md', sm: 'xl' }}>
         {usdRate > 0 && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 sm:text-sm dark:text-gray-400">
-            <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span>今日匯率：USD/TWD = <strong className="text-gray-700 dark:text-gray-200">{usdRate.toFixed(2)}</strong></span>
-          </div>
+          <Group gap={6}>
+            <DollarSign size={14} color="var(--mantine-color-dimmed)" />
+            <Text size="xs" c="dimmed">
+              今日匯率：USD/TWD = <Text component="strong" size="xs" c="bright">{usdRate.toFixed(2)}</Text>
+            </Text>
+          </Group>
         )}
 
-        {/* 摘要卡片 */}
         <PortfolioSummary
           stocks={stocks}
           usdRate={usdRate}
@@ -97,32 +98,40 @@ export default function DashboardPage() {
           onTogglePrivacy={() => setPrivacyMode(!privacyMode)}
         />
 
-        {/* 持股一覽 + 右側面板 */}
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-          {/* 持股卡片 */}
-          <div className="xl:col-span-2">
+        <Box
+          style={{
+            display: 'grid',
+            gap: 'var(--mantine-spacing-lg)',
+            gridTemplateColumns: 'minmax(0, 1fr)',
+          }}
+          className="dashboard-grid"
+        >
+          <Box style={{ minWidth: 0 }}>
             {stocks.length === 0 ? (
-              <div className="rounded-xl bg-white p-8 text-center shadow-sm border border-gray-200 sm:p-12 dark:bg-gray-800 dark:border-gray-700">
-                <p className="text-gray-400 text-base sm:text-lg">尚未新增任何持股</p>
-                <p className="text-gray-400 text-xs mt-1 sm:text-sm">前往「持股管理」開始記錄</p>
-              </div>
+              <Card withBorder radius="lg" p="xl">
+                <Center>
+                  <Stack align="center" gap={4}>
+                    <Text c="dimmed" size="lg">尚未新增任何持股</Text>
+                    <Text c="dimmed" size="sm">前往「持股管理」開始記錄</Text>
+                  </Stack>
+                </Center>
+              </Card>
             ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                 {stocks.map((stock) => (
                   <StockCard key={stock._id} stock={stock} usdRate={usdRate} privacyMode={privacyMode} />
                 ))}
-              </div>
+              </SimpleGrid>
             )}
-          </div>
+          </Box>
 
-          {/* 右側：圓餅圖 + 年度損益 + 警報 */}
-          <div className="space-y-5">
+          <Stack gap="lg" style={{ minWidth: 0 }}>
             <PriceChart stocks={stocks} />
             <YearlyPLReport stocks={stocks} usdRate={usdRate} privacyMode={privacyMode} />
             <AlertStatusPanel alerts={alerts} />
-          </div>
-        </div>
-      </div>
+          </Stack>
+        </Box>
+      </Stack>
     </div>
   );
 }

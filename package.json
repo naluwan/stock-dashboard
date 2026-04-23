@@ -21,7 +21,8 @@
     "@mantine/core": "^9.1.0",
     "@mantine/dates": "^9.1.0",
     "@mantine/hooks": "^9.1.0",
-    "@tailwindcss/typography": "^0.5.19",
+    "@mantine/modals": "^9.1.0",
+    "@mantine/notifications": "^9.1.0",
     "dayjs": "^1.11.20",
     "lucide-react": "^0.577.0",
     "mongoose": "^9.2.4",
@@ -34,14 +35,12 @@
     "postcss-simple-vars": "^7.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-hot-toast": "^2.6.0",
     "react-markdown": "^10.1.0",
     "recharts": "^3.7.0",
     "remark-gfm": "^4.0.1",
     "yahoo-finance2": "^3.13.2"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^7.0.11",
@@ -49,7 +48,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
     "typescript": "^5"
   }
 }

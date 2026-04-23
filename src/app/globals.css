@@ -1,28 +1,17 @@
-@import "@mantine/core/styles.css";
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
-
-:root {
-  --background: #f9fafb;
-  --foreground: #111827;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #111827;
-    --foreground: #f9fafb;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif;
 }
 
-/* Custom scrollbar */
+/* Dashboard main content + side panel responsive layout */
+@media (min-width: 88em) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -30,10 +19,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--mantine-color-default-border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--mantine-color-dimmed);
 }

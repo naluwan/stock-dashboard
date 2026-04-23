@@ -1,9 +1,14 @@
 import type { Metadata } from 'next';
-import { ColorSchemeScript, MantineProvider, createTheme } from '@mantine/core';
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import '@mantine/dates/styles.css';
+import '@mantine/charts/styles.css';
+import { ColorSchemeScript, MantineProvider, createTheme, mantineHtmlProps } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
+import { ModalsProvider } from '@mantine/modals';
 import './globals.css';
-import Sidebar from '@/components/layout/Sidebar';
+import AppLayout from '@/components/layout/AppLayout';
 import AlertPollerProvider from '@/components/layout/AlertPollerProvider';
-import ToastProvider from '@/components/ui/ToastProvider';
 
 export const metadata: Metadata = {
   title: 'Stock Dashboard - 股票投資監控',
@@ -22,18 +27,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-TW" suppressHydrationWarning>
+    <html lang="zh-TW" {...mantineHtmlProps}>
       <head>
         <ColorSchemeScript defaultColorScheme="dark" />
       </head>
-      <body className="bg-gray-100 text-gray-900 antialiased dark:bg-gray-900 dark:text-white">
+      <body>
         <MantineProvider theme={theme} defaultColorScheme="dark">
-          <AlertPollerProvider />
-          <ToastProvider />
-          <Sidebar />
-          <main className="min-h-screen transition-all lg:ml-60">
-            {children}
-          </main>
+          <ModalsProvider>
+            <Notifications position="top-center" />
+            <AlertPollerProvider />
+            <AppLayout>{children}</AppLayout>
+          </ModalsProvider>
         </MantineProvider>
       </body>
     </html>

@@ -1,40 +1,22 @@
-import toast from 'react-hot-toast';
+'use client';
+
+import { modals } from '@mantine/modals';
+import { Text } from '@mantine/core';
 
 /**
- * 用 react-hot-toast 實作確認對話框，取代 window.confirm
+ * 用 Mantine modals 實作確認對話框，取代 window.confirm
+ * 保留 confirmToast 名稱以維持既有 caller 相容
  */
 export function confirmToast(message: string): Promise<boolean> {
   return new Promise((resolve) => {
-    toast(
-      (t) => (
-        <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium">{message}</p>
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => { toast.dismiss(t.id); resolve(false); }}
-              className="rounded-lg bg-gray-600 px-4 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-500 transition-colors"
-            >
-              取消
-            </button>
-            <button
-              onClick={() => { toast.dismiss(t.id); resolve(true); }}
-              className="rounded-lg bg-red-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-red-600 transition-colors"
-            >
-              確定
-            </button>
-          </div>
-        </div>
-      ),
-      {
-        duration: Infinity,
-        style: {
-          background: '#1f2937',
-          color: '#f3f4f6',
-          borderRadius: '0.75rem',
-          padding: '16px',
-          maxWidth: '360px',
-        },
-      }
-    );
+    modals.openConfirmModal({
+      title: '確認',
+      centered: true,
+      children: <Text size="sm">{message}</Text>,
+      labels: { confirm: '確定', cancel: '取消' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => resolve(true),
+      onCancel: () => resolve(false),
+    });
   });
 }

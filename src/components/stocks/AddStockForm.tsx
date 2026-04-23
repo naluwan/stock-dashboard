@@ -1,6 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import {
+  ActionIcon,
+  Button,
+  Group,
+  NumberInput,
+  Paper,
+  ScrollArea,
+  SegmentedControl,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
+import { DateInput } from '@mantine/dates';
 import { Plus, Trash2 } from 'lucide-react';
 import { Market, Purchase } from '@/types';
 
@@ -20,54 +34,51 @@ interface AddStockFormProps {
   };
 }
 
-// 將數字轉為顯示用字串，0 顯示空字串（方便輸入）
-const numToStr = (n: number | undefined): string => {
-  if (n === undefined || n === null) return '';
-  if (n === 0) return '';
-  return String(n);
-};
+type NumValue = number | string; // Mantine NumberInput 支援的中間狀態
 
-// 安全解析數字，保留 0
-const safeParseFloat = (s: string): number => {
-  if (s === '' || s === '-') return 0;
-  const n = parseFloat(s);
+const toNum = (v: NumValue): number => {
+  if (v === '' || v === '-') return 0;
+  const n = typeof v === 'number' ? v : parseFloat(v);
   return isNaN(n) ? 0 : n;
 };
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 export default function AddStockForm({ onSubmit, onCancel, initialData }: AddStockFormProps) {
   const [symbol, setSymbol] = useState(initialData?.symbol || '');
   const [name, setName] = useState(initialData?.name || '');
   const [market, setMarket] = useState<Market>(initialData?.market || 'TW');
 
-  // 用字串追蹤所有數字輸入，避免 type="number" 吃掉中間狀態（如 "0.", "0.5"）
-  const initShares = initialData?.purchases?.map((p) => numToStr(p.shares)) || [''];
-  const initPrices = initialData?.purchases?.map((p) => numToStr(p.price)) || [''];
-  const initAmounts = initialData?.purchases?.map((p) => numToStr(p.shares * p.price)) || [''];
-  const initRates = initialData?.purchases?.map((p) => numToStr(p.exchangeRate)) || [''];
+  const initShares = initialData?.purchases?.map((p) => (p.shares || '') as NumValue) || [''];
+  const initPrices = initialData?.purchases?.map((p) => (p.price || '') as NumValue) || [''];
+  const initAmounts =
+    initialData?.purchases?.map((p) => (p.shares && p.price ? round2(p.shares * p.price) : '') as NumValue) || [''];
+  const initRates = initialData?.purchases?.map((p) => (p.exchangeRate || '') as NumValue) || [''];
   const initDates = initialData?.purchases?.map((p) => {
     const d = p.date instanceof Date ? p.date : new Date(p.date);
-    return d.toISOString().split('T')[0];
-  }) || [new Date().toISOString().split('T')[0]];
+    return d;
+  }) || [new Date()];
   const initNotes = initialData?.purchases?.map((p) => p.note || '') || [''];
-  const initCommissions = initialData?.purchases?.map((p) => numToStr(p.commission)) || [''];
+  const initCommissions = initialData?.purchases?.map((p) => (p.commission || '') as NumValue) || [''];
 
-  const [sharesInputs, setSharesInputs] = useState<string[]>(initShares);
-  const [priceInputs, setPriceInputs] = useState<string[]>(initPrices);
-  const [amountInputs, setAmountInputs] = useState<string[]>(initAmounts);
-  const [rateInputs, setRateInputs] = useState<string[]>(initRates);
-  const [dateInputs, setDateInputs] = useState<string[]>(initDates);
+  const [sharesInputs, setSharesInputs] = useState<NumValue[]>(initShares);
+  const [priceInputs, setPriceInputs] = useState<NumValue[]>(initPrices);
+  const [amountInputs, setAmountInputs] = useState<NumValue[]>(initAmounts);
+  const [rateInputs, setRateInputs] = useState<NumValue[]>(initRates);
+  const [dateInputs, setDateInputs] = useState<Date[]>(initDates);
   const [noteInputs, setNoteInputs] = useState<string[]>(initNotes);
-  const [commissionInputs, setCommissionInputs] = useState<string[]>(initCommissions);
+  const [commissionInputs, setCommissionInputs] = useState<NumValue[]>(initCommissions);
 
   const [currentUsdRate, setCurrentUsdRate] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 取得當日匯率供預設值使用
   useEffect(() => {
     if (market === 'US') {
       fetch('/api/exchange-rate')
-        .then(res => res.json())
-        .then(data => { if (data.rate) setCurrentUsdRate(data.rate); })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.rate) setCurrentUsdRate(data.rate);
+        })
         .catch(() => {});
     }
   }, [market]);
@@ -77,14 +88,14 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
     setPriceInputs([...priceInputs, '']);
     setAmountInputs([...amountInputs, '']);
     setRateInputs([...rateInputs, '']);
-    setDateInputs([...dateInputs, new Date().toISOString().split('T')[0]]);
+    setDateInputs([...dateInputs, new Date()]);
     setNoteInputs([...noteInputs, '']);
     setCommissionInputs([...commissionInputs, '']);
   };
 
   const removePurchase = (index: number) => {
     if (sharesInputs.length > 1) {
-      const remove = (_: string, i: number) => i !== index;
+      const remove = <T,>(_: T, i: number) => i !== index;
       setSharesInputs(sharesInputs.filter(remove));
       setPriceInputs(priceInputs.filter(remove));
       setAmountInputs(amountInputs.filter(remove));
@@ -95,46 +106,40 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
     }
   };
 
-  // 更新字串陣列 helper
-  const updateAt = (arr: string[], index: number, value: string): string[] => {
+  const updateAt = <T,>(arr: T[], index: number, value: T): T[] => {
     const newArr = [...arr];
     newArr[index] = value;
     return newArr;
   };
 
-  // 當股數改變時，如果有價格就自動算總金額
-  const handleSharesChange = (index: number, raw: string) => {
+  const handleSharesChange = (index: number, raw: NumValue) => {
     setSharesInputs(updateAt(sharesInputs, index, raw));
-    const shares = safeParseFloat(raw);
-    const price = safeParseFloat(priceInputs[index]);
+    const shares = toNum(raw);
+    const price = toNum(priceInputs[index]);
     if (price > 0 && shares > 0) {
-      setAmountInputs(updateAt(amountInputs, index, String(Math.round(shares * price * 100) / 100)));
+      setAmountInputs(updateAt(amountInputs, index, round2(shares * price)));
     }
   };
 
-  // 當價格改變時，如果有股數就自動算總金額
-  const handlePriceChange = (index: number, raw: string) => {
+  const handlePriceChange = (index: number, raw: NumValue) => {
     setPriceInputs(updateAt(priceInputs, index, raw));
-    const price = safeParseFloat(raw);
-    const shares = safeParseFloat(sharesInputs[index]);
+    const price = toNum(raw);
+    const shares = toNum(sharesInputs[index]);
     if (shares > 0 && price > 0) {
-      setAmountInputs(updateAt(amountInputs, index, String(Math.round(shares * price * 100) / 100)));
+      setAmountInputs(updateAt(amountInputs, index, round2(shares * price)));
     }
   };
 
-  // 當總金額改變時，根據已有的另一個值反算
-  const handleAmountChange = (index: number, raw: string) => {
+  const handleAmountChange = (index: number, raw: NumValue) => {
     setAmountInputs(updateAt(amountInputs, index, raw));
-    const amount = safeParseFloat(raw);
-    const price = safeParseFloat(priceInputs[index]);
-    const shares = safeParseFloat(sharesInputs[index]);
+    const amount = toNum(raw);
+    const price = toNum(priceInputs[index]);
+    const shares = toNum(sharesInputs[index]);
 
     if (price > 0 && amount > 0) {
-      // 有價格 → 算股數
-      setSharesInputs(updateAt(sharesInputs, index, String(Math.round(amount / price * 100) / 100)));
+      setSharesInputs(updateAt(sharesInputs, index, round2(amount / price)));
     } else if (shares > 0 && amount > 0) {
-      // 有股數 → 算價格
-      setPriceInputs(updateAt(priceInputs, index, String(Math.round(amount / shares * 100) / 100)));
+      setPriceInputs(updateAt(priceInputs, index, round2(amount / shares)));
     }
   };
 
@@ -144,18 +149,16 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
     try {
       const purchases: Omit<Purchase, '_id'>[] = sharesInputs.map((_, i) => {
         const base: Omit<Purchase, '_id'> = {
-          shares: safeParseFloat(sharesInputs[i]),
-          price: safeParseFloat(priceInputs[i]),
-          date: new Date(dateInputs[i]),
+          shares: toNum(sharesInputs[i]),
+          price: toNum(priceInputs[i]),
+          date: dateInputs[i] ?? new Date(),
           note: noteInputs[i] || undefined,
         };
-        // 手續費
-        const comm = safeParseFloat(commissionInputs[i]);
+        const comm = toNum(commissionInputs[i]);
         if (comm > 0) base.commission = comm;
-        // 美股附加匯率：有填就用填的，沒填用當日匯率
         if (market === 'US') {
-          const rate = safeParseFloat(rateInputs[i]);
-          base.exchangeRate = rate > 0 ? rate : (currentUsdRate || undefined);
+          const rate = toNum(rateInputs[i]);
+          base.exchangeRate = rate > 0 ? rate : currentUsdRate || undefined;
         }
         return base;
       });
@@ -168,194 +171,159 @@ export default function AddStockForm({ onSubmit, onCancel, initialData }: AddSto
   const purchaseCount = sharesInputs.length;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            股票代碼
-          </label>
-          <input
-            type="text"
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
+    <form onSubmit={handleSubmit}>
+      <Stack gap="md">
+        <SimpleGrid cols={2} spacing="md">
+          <TextInput
+            label="股票代碼"
             placeholder={market === 'TW' ? '例: 2330' : '例: AAPL'}
+            value={symbol}
+            onChange={(e) => setSymbol(e.currentTarget.value)}
             required
             disabled={!!initialData}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white disabled:opacity-50"
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            股票名稱
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+          <TextInput
+            label="股票名稱"
             placeholder="例: 台積電"
+            value={name}
+            onChange={(e) => setName(e.currentTarget.value)}
             required
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+          />
+        </SimpleGrid>
+
+        <div>
+          <Text size="sm" fw={500} mb={6}>市場</Text>
+          <SegmentedControl
+            fullWidth
+            value={market}
+            onChange={(v) => setMarket(v as Market)}
+            disabled={!!initialData}
+            data={[
+              { label: '🇹🇼 台股', value: 'TW' },
+              { label: '🇺🇸 美股', value: 'US' },
+            ]}
           />
         </div>
-      </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          市場
-        </label>
-        <div className="flex gap-3">
-          {(['TW', 'US'] as Market[]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMarket(m)}
-              disabled={!!initialData}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                market === m
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
-              } disabled:opacity-50`}
+        <div>
+          <Group justify="space-between" mb={6}>
+            <Text size="sm" fw={500}>購買紀錄</Text>
+            <Button
+              variant="subtle"
+              size="compact-xs"
+              leftSection={<Plus size={12} />}
+              onClick={addPurchase}
             >
-              {m === 'TW' ? '🇹🇼 台股' : '🇺🇸 美股'}
-            </button>
-          ))}
-        </div>
-      </div>
+              新增一筆
+            </Button>
+          </Group>
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            購買紀錄
-          </label>
-          <button
-            type="button"
-            onClick={addPurchase}
-            className="flex items-center gap-1 text-xs text-emerald-500 hover:text-emerald-600"
-          >
-            <Plus className="h-3 w-3" /> 新增一筆
-          </button>
-        </div>
-
-        <div className="space-y-3 max-h-60 overflow-y-auto">
-          {Array.from({ length: purchaseCount }).map((_, index) => (
-            <div key={index} className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/50">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  第 {index + 1} 筆
-                </span>
-                {purchaseCount > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removePurchase(index)}
-                    className="text-red-400 hover:text-red-500"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-              <div className={`grid grid-cols-2 gap-2 ${market === 'US' ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400">股數</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={sharesInputs[index]}
-                    onChange={(e) => handleSharesChange(index, e.target.value)}
-                    placeholder="0"
-                    required
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400">買入價格</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={priceInputs[index]}
-                    onChange={(e) => handlePriceChange(index, e.target.value)}
-                    placeholder="0"
-                    required
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400">總金額</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={amountInputs[index]}
-                    onChange={(e) => handleAmountChange(index, e.target.value)}
-                    placeholder="自動計算"
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400">日期</label>
-                  <input
-                    type="date"
-                    value={dateInputs[index]}
-                    onChange={(e) => setDateInputs(updateAt(dateInputs, index, e.target.value))}
-                    required
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-                {market === 'US' && (
-                  <div>
-                    <label className="text-xs text-gray-500 dark:text-gray-400">匯率</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={rateInputs[index]}
-                      onChange={(e) => setRateInputs(updateAt(rateInputs, index, e.target.value))}
-                      placeholder={currentUsdRate > 0 ? currentUsdRate.toFixed(2) : '當日匯率'}
-                      className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
+          <ScrollArea.Autosize mah={320}>
+            <Stack gap="sm">
+              {Array.from({ length: purchaseCount }).map((_, index) => (
+                <Paper key={index} p="sm" bg="var(--mantine-color-default-hover)" radius="md">
+                  <Group justify="space-between" mb={8}>
+                    <Text size="xs" c="dimmed" fw={500}>第 {index + 1} 筆</Text>
+                    {purchaseCount > 1 && (
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="sm"
+                        onClick={() => removePurchase(index)}
+                      >
+                        <Trash2 size={14} />
+                      </ActionIcon>
+                    )}
+                  </Group>
+                  <SimpleGrid cols={{ base: 2, sm: market === 'US' ? 5 : 4 }} spacing="xs">
+                    <NumberInput
+                      label="股數"
+                      size="xs"
+                      value={sharesInputs[index]}
+                      onChange={(v) => handleSharesChange(index, v)}
+                      placeholder="0"
+                      min={0}
+                      decimalScale={4}
+                      hideControls
+                      required
                     />
-                  </div>
-                )}
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400">手續費</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={commissionInputs[index]}
-                    onChange={(e) => setCommissionInputs(updateAt(commissionInputs, index, e.target.value))}
-                    placeholder="0"
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    value={noteInputs[index]}
-                    onChange={(e) => setNoteInputs(updateAt(noteInputs, index, e.target.value))}
-                    placeholder="備註（選填）"
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none mt-5"
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+                    <NumberInput
+                      label="買入價格"
+                      size="xs"
+                      value={priceInputs[index]}
+                      onChange={(v) => handlePriceChange(index, v)}
+                      placeholder="0"
+                      min={0}
+                      decimalScale={4}
+                      hideControls
+                      required
+                    />
+                    <NumberInput
+                      label="總金額"
+                      size="xs"
+                      value={amountInputs[index]}
+                      onChange={(v) => handleAmountChange(index, v)}
+                      placeholder="自動計算"
+                      min={0}
+                      decimalScale={2}
+                      hideControls
+                    />
+                    <DateInput
+                      label="日期"
+                      size="xs"
+                      value={dateInputs[index]}
+                      onChange={(v) =>
+                        setDateInputs(updateAt(dateInputs, index, (v ? new Date(v) : new Date())))
+                      }
+                      required
+                    />
+                    {market === 'US' && (
+                      <NumberInput
+                        label="匯率"
+                        size="xs"
+                        value={rateInputs[index]}
+                        onChange={(v) => setRateInputs(updateAt(rateInputs, index, v))}
+                        placeholder={currentUsdRate > 0 ? currentUsdRate.toFixed(2) : '當日匯率'}
+                        min={0}
+                        decimalScale={4}
+                        hideControls
+                      />
+                    )}
+                  </SimpleGrid>
+                  <SimpleGrid cols={2} spacing="xs" mt="xs">
+                    <NumberInput
+                      label="手續費"
+                      size="xs"
+                      value={commissionInputs[index]}
+                      onChange={(v) => setCommissionInputs(updateAt(commissionInputs, index, v))}
+                      placeholder="0"
+                      min={0}
+                      decimalScale={2}
+                      hideControls
+                    />
+                    <TextInput
+                      label="備註"
+                      size="xs"
+                      value={noteInputs[index]}
+                      onChange={(e) => setNoteInputs(updateAt(noteInputs, index, e.currentTarget.value))}
+                      placeholder="選填"
+                    />
+                  </SimpleGrid>
+                </Paper>
+              ))}
+            </Stack>
+          </ScrollArea.Autosize>
         </div>
-      </div>
 
-      <div className="flex gap-3 pt-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-        >
-          取消
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="flex-1 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
-        >
-          {isSubmitting ? '處理中...' : initialData ? '更新' : '新增'}
-        </button>
-      </div>
+        <Group grow>
+          <Button variant="default" onClick={onCancel} type="button">
+            取消
+          </Button>
+          <Button type="submit" color="teal" loading={isSubmitting}>
+            {initialData ? '更新' : '新增'}
+          </Button>
+        </Group>
+      </Stack>
     </form>
   );
 }

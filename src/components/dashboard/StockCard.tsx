@@ -1,5 +1,6 @@
 'use client';
 
+import { Badge, Card, Group, Paper, SimpleGrid, Text } from '@mantine/core';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
 import { formatCurrency, formatAmount, formatPercent, formatShares } from '@/lib/utils';
@@ -16,69 +17,84 @@ export default function StockCard({ stock, usdRate = 0, privacyMode = false }: S
   const isProfit = (stock.totalProfit || 0) >= 0;
   const isUS = stock.market === 'US';
 
-  function TWDLine({ usd, rate }: { usd: number; rate: number }) {
+  const TWDLine = ({ usd, rate }: { usd: number; rate: number }) => {
     if (rate <= 0 || privacyMode) return null;
     return (
-      <p className="text-[10px] text-gray-400">
+      <Text size="10px" c="dimmed">
         ≈ NT$ {Math.round(usd * rate).toLocaleString()}
-      </p>
+      </Text>
     );
-  }
+  };
 
   return (
-    <div className="rounded-xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-start justify-between">
+    <Card withBorder radius="lg" p="md">
+      <Group justify="space-between" align="flex-start">
         <div>
-          <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-              stock.market === 'TW' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-            }`}>
+          <Group gap="xs">
+            <Badge size="xs" color={stock.market === 'TW' ? 'blue' : 'violet'} variant="light">
               {stock.market === 'TW' ? '台股' : '美股'}
-            </span>
-            <h3 className="font-bold text-gray-900 dark:text-white">{stock.symbol}</h3>
-          </div>
-          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{stock.name}</p>
+            </Badge>
+            <Text fw={700}>{stock.symbol}</Text>
+          </Group>
+          <Text size="sm" c="dimmed" mt={2}>{stock.name}</Text>
         </div>
-        <div className={`flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium ${
-          isProfit ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-        }`}>
-          {privacyMode ? (
-            <span>{MASK}</span>
-          ) : (
-            <>
-              {isProfit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              {formatPercent(stock.totalProfitPercent || 0)}
-            </>
-          )}
-        </div>
-      </div>
+        <Paper
+          px="xs"
+          py={4}
+          radius="md"
+          bg={isProfit ? 'var(--mantine-color-teal-light)' : 'var(--mantine-color-red-light)'}
+        >
+          <Group gap={4} wrap="nowrap">
+            {privacyMode ? (
+              <Text size="sm" fw={500} c="dimmed">{MASK}</Text>
+            ) : (
+              <>
+                {isProfit
+                  ? <TrendingUp size={14} color="var(--mantine-color-teal-6)" />
+                  : <TrendingDown size={14} color="var(--mantine-color-red-6)" />
+                }
+                <Text size="sm" fw={500} c={isProfit ? 'teal' : 'red'}>
+                  {formatPercent(stock.totalProfitPercent || 0)}
+                </Text>
+              </>
+            )}
+          </Group>
+        </Paper>
+      </Group>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <SimpleGrid cols={2} spacing="sm" mt="md">
         <div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">目前價格</p>
-          <p className="font-semibold text-gray-900 dark:text-white">
+          <Text size="xs" c="dimmed">目前價格</Text>
+          <Text fw={600}>
             {stock.currentPrice ? formatCurrency(stock.currentPrice, stock.market) : '-'}
-          </p>
+          </Text>
           {isUS && stock.currentPrice ? <TWDLine usd={stock.currentPrice} rate={usdRate} /> : null}
         </div>
         <div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">平均成本</p>
-          <p className="font-semibold text-gray-900 dark:text-white">
+          <Text size="xs" c="dimmed">平均成本</Text>
+          <Text fw={600}>
             {privacyMode ? MASK : formatCurrency(stock.averagePrice, stock.market)}
-          </p>
+          </Text>
         </div>
         <div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">持有股數</p>
-          <p className="font-semibold text-gray-900 dark:text-white">{formatShares(stock.totalShares, stock.market)}</p>
+          <Text size="xs" c="dimmed">持有股數</Text>
+          <Text fw={600}>{formatShares(stock.totalShares, stock.market)}</Text>
         </div>
         <div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">未實現損益</p>
-          <p className={`font-semibold ${isProfit ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-            {privacyMode ? MASK : (stock.totalProfit !== undefined ? formatAmount(stock.totalProfit, stock.market) : '-')}
-          </p>
-          {!privacyMode && isUS && stock.totalProfit !== undefined ? <TWDLine usd={stock.totalProfit} rate={usdRate} /> : null}
+          <Text size="xs" c="dimmed">未實現損益</Text>
+          <Text fw={600} c={isProfit ? 'teal' : 'red'}>
+            {privacyMode
+              ? MASK
+              : stock.totalProfit !== undefined
+                ? formatAmount(stock.totalProfit, stock.market)
+                : '-'
+            }
+          </Text>
+          {!privacyMode && isUS && stock.totalProfit !== undefined
+            ? <TWDLine usd={stock.totalProfit} rate={usdRate} />
+            : null}
         </div>
-      </div>
-    </div>
+      </SimpleGrid>
+    </Card>
   );
 }

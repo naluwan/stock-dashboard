@@ -1,6 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import {
+  Alert,
+  Badge,
+  Button,
+  Group,
+  NumberInput,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
+import { DateInput } from '@mantine/dates';
 import { StockWithCalculations } from '@/types';
 import { formatCurrency, formatAmount, formatShares } from '@/lib/utils';
 
@@ -19,21 +32,25 @@ interface SellStockFormProps {
   onCancel: () => void;
 }
 
-const safeParseFloat = (s: string): number => {
-  if (s === '' || s === '-') return 0;
-  const n = parseFloat(s);
+type NumValue = number | string;
+
+const toNum = (v: NumValue): number => {
+  if (v === '' || v === '-') return 0;
+  const n = typeof v === 'number' ? v : parseFloat(v);
   return isNaN(n) ? 0 : n;
 };
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFormProps) {
-  const [sharesInput, setSharesInput] = useState('');
-  const [priceInput, setPriceInput] = useState('');
-  const [amountInput, setAmountInput] = useState('');
-  const [dateInput, setDateInput] = useState(new Date().toISOString().split('T')[0]);
+  const [sharesInput, setSharesInput] = useState<NumValue>('');
+  const [priceInput, setPriceInput] = useState<NumValue>('');
+  const [amountInput, setAmountInput] = useState<NumValue>('');
+  const [dateInput, setDateInput] = useState<Date>(new Date());
   const [noteInput, setNoteInput] = useState('');
-  const [rateInput, setRateInput] = useState('');
-  const [commissionInput, setCommissionInput] = useState('');
-  const [taxInput, setTaxInput] = useState('');
+  const [rateInput, setRateInput] = useState<NumValue>('');
+  const [commissionInput, setCommissionInput] = useState<NumValue>('');
+  const [taxInput, setTaxInput] = useState<NumValue>('');
   const [currentUsdRate, setCurrentUsdRate] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -42,69 +59,66 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
   useEffect(() => {
     if (isUS) {
       fetch('/api/exchange-rate')
-        .then(res => res.json())
-        .then(data => { if (data.rate) setCurrentUsdRate(data.rate); })
+        .then((res) => res.json())
+        .then((data) => { if (data.rate) setCurrentUsdRate(data.rate); })
         .catch(() => {});
     }
   }, [isUS]);
 
-  // 填入目前價格
   useEffect(() => {
     if (stock.currentPrice) {
-      setPriceInput(String(stock.currentPrice));
+      setPriceInput(stock.currentPrice);
     }
   }, [stock.currentPrice]);
 
-  const handleSharesChange = (raw: string) => {
+  const handleSharesChange = (raw: NumValue) => {
     setSharesInput(raw);
-    const shares = safeParseFloat(raw);
-    const price = safeParseFloat(priceInput);
+    const shares = toNum(raw);
+    const price = toNum(priceInput);
     if (price > 0 && shares > 0) {
-      setAmountInput(String(Math.round(shares * price * 100) / 100));
+      setAmountInput(round2(shares * price));
     }
   };
 
-  const handlePriceChange = (raw: string) => {
+  const handlePriceChange = (raw: NumValue) => {
     setPriceInput(raw);
-    const price = safeParseFloat(raw);
-    const shares = safeParseFloat(sharesInput);
+    const price = toNum(raw);
+    const shares = toNum(sharesInput);
     if (shares > 0 && price > 0) {
-      setAmountInput(String(Math.round(shares * price * 100) / 100));
+      setAmountInput(round2(shares * price));
     }
   };
 
-  const handleAmountChange = (raw: string) => {
+  const handleAmountChange = (raw: NumValue) => {
     setAmountInput(raw);
-    const amount = safeParseFloat(raw);
-    const price = safeParseFloat(priceInput);
-    const shares = safeParseFloat(sharesInput);
+    const amount = toNum(raw);
+    const price = toNum(priceInput);
+    const shares = toNum(sharesInput);
     if (price > 0 && amount > 0) {
-      setSharesInput(String(Math.round(amount / price * 100) / 100));
+      setSharesInput(round2(amount / price));
     } else if (shares > 0 && amount > 0) {
-      setPriceInput(String(Math.round(amount / shares * 100) / 100));
+      setPriceInput(round2(amount / shares));
     }
   };
 
   const sellAll = () => {
-    setSharesInput(String(stock.totalShares));
-    const price = safeParseFloat(priceInput);
+    setSharesInput(stock.totalShares);
+    const price = toNum(priceInput);
     if (price > 0) {
-      setAmountInput(String(Math.round(stock.totalShares * price * 100) / 100));
+      setAmountInput(round2(stock.totalShares * price));
     }
   };
 
-  const shares = safeParseFloat(sharesInput);
-  const commission = safeParseFloat(commissionInput);
-  const tax = safeParseFloat(taxInput);
+  const shares = toNum(sharesInput);
+  const commission = toNum(commissionInput);
+  const tax = toNum(taxInput);
   const estimatedPL = shares > 0
-    ? (safeParseFloat(priceInput) - stock.averagePrice) * shares - commission - tax
+    ? (toNum(priceInput) - stock.averagePrice) * shares - commission - tax
     : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (shares <= 0) return;
-    if (shares > stock.totalShares) return;
+    if (shares <= 0 || shares > stock.totalShares) return;
 
     setIsSubmitting(true);
     try {
@@ -120,16 +134,16 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
       } = {
         stockId: stock._id!,
         shares,
-        price: safeParseFloat(priceInput),
-        date: dateInput,
+        price: toNum(priceInput),
+        date: dateInput.toISOString().split('T')[0],
         note: noteInput || undefined,
         commission: commission > 0 ? commission : undefined,
         tax: tax > 0 ? tax : undefined,
       };
 
       if (isUS) {
-        const rate = safeParseFloat(rateInput);
-        data.exchangeRate = rate > 0 ? rate : (currentUsdRate || undefined);
+        const rate = toNum(rateInput);
+        data.exchangeRate = rate > 0 ? rate : currentUsdRate || undefined;
       }
 
       await onSubmit(data);
@@ -139,171 +153,149 @@ export default function SellStockForm({ stock, onSubmit, onCancel }: SellStockFo
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* 股票資訊 */}
-      <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/50">
-        <div className="flex items-center justify-between">
-          <div>
-            <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium mr-2 ${
-              stock.market === 'TW' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-            }`}>{stock.market}</span>
-            <span className="font-bold text-gray-900 dark:text-white">{stock.symbol}</span>
-            <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">{stock.name}</span>
-          </div>
-        </div>
-        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-          <div>
-            <p className="text-gray-400">持有股數</p>
-            <p className="font-semibold text-gray-900 dark:text-white">{formatShares(stock.totalShares, stock.market)}</p>
-          </div>
-          <div>
-            <p className="text-gray-400">平均成本</p>
-            <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(stock.averagePrice, stock.market)}</p>
-          </div>
-          <div>
-            <p className="text-gray-400">目前價格</p>
-            <p className="font-semibold text-gray-900 dark:text-white">{stock.currentPrice ? formatCurrency(stock.currentPrice, stock.market) : '-'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* 賣出表單 */}
-      <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/50">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">賣出資訊</span>
-          <button type="button" onClick={sellAll} className="text-[10px] text-emerald-500 hover:text-emerald-600 font-medium">
-            全部賣出
-          </button>
-        </div>
-        <div className={`grid gap-2 ${isUS ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400">股數</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={sharesInput}
-              onChange={(e) => handleSharesChange(e.target.value)}
-              placeholder="0"
-              required
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-            />
-            {shares > stock.totalShares && (
-              <p className="text-[10px] text-red-500 mt-0.5">超過持有股數</p>
-            )}
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400">賣出價格</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={priceInput}
-              onChange={(e) => handlePriceChange(e.target.value)}
-              placeholder="0"
-              required
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400">總金額</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={amountInput}
-              onChange={(e) => handleAmountChange(e.target.value)}
-              placeholder="自動計算"
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400">日期</label>
-            <input
-              type="date"
-              value={dateInput}
-              onChange={(e) => setDateInput(e.target.value)}
-              required
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-            />
-          </div>
-          {isUS && (
+    <form onSubmit={handleSubmit}>
+      <Stack gap="md">
+        <Paper p="sm" bg="var(--mantine-color-default-hover)" radius="md">
+          <Group gap="xs" mb="xs">
+            <Badge size="xs" color={stock.market === 'TW' ? 'blue' : 'violet'}>{stock.market}</Badge>
+            <Text fw={700}>{stock.symbol}</Text>
+            <Text size="sm" c="dimmed">{stock.name}</Text>
+          </Group>
+          <SimpleGrid cols={3} spacing="xs">
             <div>
-              <label className="text-xs text-gray-500 dark:text-gray-400">匯率</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={rateInput}
-                onChange={(e) => setRateInput(e.target.value)}
-                placeholder={currentUsdRate > 0 ? currentUsdRate.toFixed(2) : '當日匯率'}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
-              />
+              <Text size="xs" c="dimmed">持有股數</Text>
+              <Text size="sm" fw={600}>{formatShares(stock.totalShares, stock.market)}</Text>
             </div>
-          )}
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400">手續費</label>
-            <input
-              type="text"
-              inputMode="decimal"
+            <div>
+              <Text size="xs" c="dimmed">平均成本</Text>
+              <Text size="sm" fw={600}>{formatCurrency(stock.averagePrice, stock.market)}</Text>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed">目前價格</Text>
+              <Text size="sm" fw={600}>
+                {stock.currentPrice ? formatCurrency(stock.currentPrice, stock.market) : '-'}
+              </Text>
+            </div>
+          </SimpleGrid>
+        </Paper>
+
+        <Paper p="sm" bg="var(--mantine-color-default-hover)" radius="md">
+          <Group justify="space-between" mb={8}>
+            <Text size="xs" c="dimmed" fw={500}>賣出資訊</Text>
+            <Button variant="subtle" size="compact-xs" color="teal" onClick={sellAll} type="button">
+              全部賣出
+            </Button>
+          </Group>
+          <SimpleGrid cols={{ base: 2, sm: isUS ? 5 : 4 }} spacing="xs">
+            <NumberInput
+              label="股數"
+              size="xs"
+              value={sharesInput}
+              onChange={handleSharesChange}
+              placeholder="0"
+              min={0}
+              decimalScale={4}
+              hideControls
+              required
+              error={shares > stock.totalShares ? '超過持有股數' : undefined}
+            />
+            <NumberInput
+              label="賣出價格"
+              size="xs"
+              value={priceInput}
+              onChange={handlePriceChange}
+              placeholder="0"
+              min={0}
+              decimalScale={4}
+              hideControls
+              required
+            />
+            <NumberInput
+              label="總金額"
+              size="xs"
+              value={amountInput}
+              onChange={handleAmountChange}
+              placeholder="自動計算"
+              min={0}
+              decimalScale={2}
+              hideControls
+            />
+            <DateInput
+              label="日期"
+              size="xs"
+              value={dateInput}
+              onChange={(v) => setDateInput(v ? new Date(v) : new Date())}
+              required
+            />
+            {isUS && (
+              <NumberInput
+                label="匯率"
+                size="xs"
+                value={rateInput}
+                onChange={setRateInput}
+                placeholder={currentUsdRate > 0 ? currentUsdRate.toFixed(2) : '當日匯率'}
+                min={0}
+                decimalScale={4}
+                hideControls
+              />
+            )}
+          </SimpleGrid>
+          <SimpleGrid cols={2} spacing="xs" mt="xs">
+            <NumberInput
+              label="手續費"
+              size="xs"
               value={commissionInput}
-              onChange={(e) => setCommissionInput(e.target.value)}
+              onChange={setCommissionInput}
               placeholder="0"
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
+              min={0}
+              decimalScale={2}
+              hideControls
             />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400">交易稅</label>
-            <input
-              type="text"
-              inputMode="decimal"
+            <NumberInput
+              label="交易稅"
+              size="xs"
               value={taxInput}
-              onChange={(e) => setTaxInput(e.target.value)}
+              onChange={setTaxInput}
               placeholder="0"
-              className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
+              min={0}
+              decimalScale={2}
+              hideControls
             />
-          </div>
-        </div>
-        <div className="mt-2">
-          <input
-            type="text"
-            value={noteInput}
-            onChange={(e) => setNoteInput(e.target.value)}
+          </SimpleGrid>
+          <TextInput
+            mt="xs"
+            size="xs"
             placeholder="備註（選填）"
-            className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-emerald-500 focus:outline-none"
+            value={noteInput}
+            onChange={(e) => setNoteInput(e.currentTarget.value)}
           />
-        </div>
-      </div>
+        </Paper>
 
-      {/* 預估損益 */}
-      {shares > 0 && safeParseFloat(priceInput) > 0 && (
-        <div className={`rounded-lg p-3 text-sm ${
-          estimatedPL >= 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-        }`}>
-          <p className="font-medium">
-            預估已實現損益：{formatAmount(estimatedPL, stock.market)}
-            <span className="ml-1 text-xs">
-              ({stock.averagePrice > 0 ? ((estimatedPL / (stock.averagePrice * shares)) * 100).toFixed(2) : '0.00'}%)
-            </span>
-          </p>
-        </div>
-      )}
+        {shares > 0 && toNum(priceInput) > 0 && (
+          <Alert color={estimatedPL >= 0 ? 'teal' : 'red'} variant="light" py="xs">
+            <Text size="sm" fw={500}>
+              預估已實現損益：{formatAmount(estimatedPL, stock.market)}
+              <Text component="span" size="xs" ml={4}>
+                ({stock.averagePrice > 0 ? ((estimatedPL / (stock.averagePrice * shares)) * 100).toFixed(2) : '0.00'}%)
+              </Text>
+            </Text>
+          </Alert>
+        )}
 
-      {/* 按鈕 */}
-      <div className="flex gap-3 pt-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-        >
-          取消
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting || shares <= 0 || shares > stock.totalShares}
-          className="flex-1 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
-        >
-          {isSubmitting ? '處理中...' : '確認賣出'}
-        </button>
-      </div>
+        <Group grow>
+          <Button variant="default" onClick={onCancel} type="button">
+            取消
+          </Button>
+          <Button
+            type="submit"
+            color="orange"
+            loading={isSubmitting}
+            disabled={shares <= 0 || shares > stock.totalShares}
+          >
+            確認賣出
+          </Button>
+        </Group>
+      </Stack>
     </form>
   );
 }

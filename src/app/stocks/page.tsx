@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Button, Center, Group, Loader, Modal, Stack, Text } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import Header from '@/components/layout/Header';
 import StockTable from '@/components/stocks/StockTable';
 import AddStockForm from '@/components/stocks/AddStockForm';
 import SellStockForm from '@/components/stocks/SellStockForm';
 import SellHistoryList from '@/components/stocks/SellHistoryList';
-import Modal from '@/components/ui/Modal';
 import { StockWithCalculations, IStock, Market, Purchase } from '@/types';
 import { enrichStockWithCalculations } from '@/lib/utils';
-import { Plus, Loader2, DollarSign, Eye, EyeOff } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Plus, DollarSign, Eye, EyeOff } from 'lucide-react';
 import { confirmToast } from '@/lib/confirmToast';
 import {
   DndContext,
@@ -153,10 +153,10 @@ export default function StocksPage() {
 
     const res = await fetch(`/api/stocks?id=${id}`, { method: 'DELETE' });
     if (res.ok) {
-      toast.success('已刪除持股紀錄');
+      notifications.show({ message: '已刪除持股紀錄', color: 'green' });
       fetchStocks();
     } else {
-      toast.error('刪除失敗，請稍後再試');
+      notifications.show({ message: '刪除失敗，請稍後再試', color: 'red' });
     }
   };
 
@@ -175,12 +175,12 @@ export default function StocksPage() {
     });
 
     if (res.ok) {
-      toast.success('賣出成功');
+      notifications.show({ message: '賣出成功', color: 'green' });
       setSellingStock(null);
       fetchStocks();
     } else {
       const err = await res.json();
-      toast.error(err.error || '賣出失敗');
+      notifications.show({ message: err.error || '賣出失敗', color: 'red' });
     }
   };
 
@@ -195,7 +195,7 @@ export default function StocksPage() {
     );
 
     if (res.ok) {
-      toast.success('已刪除賣出紀錄');
+      notifications.show({ message: '已刪除賣出紀錄', color: 'green' });
       const updatedStock = await res.json();
       // 更新本地 historyStock 以即時反映變化
       setHistoryStock({
@@ -205,15 +205,15 @@ export default function StocksPage() {
       fetchStocks();
     } else {
       const err = await res.json();
-      toast.error(err.error || '刪除失敗');
+      notifications.show({ message: err.error || '刪除失敗', color: 'red' });
     }
   };
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-      </div>
+      <Center h="100vh">
+        <Loader color="teal" />
+      </Center>
     );
   }
 
@@ -221,36 +221,36 @@ export default function StocksPage() {
     <div>
       <Header title="持股管理" subtitle="管理你的股票投資組合" onRefresh={fetchStocks} />
 
-      <div className="p-4 sm:p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              共 {stocks.length} 檔持股
-            </p>
+      <Stack p={{ base: 'md', sm: 'xl' }} gap="md">
+        <Group justify="space-between" wrap="wrap" gap="sm">
+          <Group gap="md">
+            <Text size="sm" c="dimmed">共 {stocks.length} 檔持股</Text>
             {usdRate > 0 && (
-              <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
-                <DollarSign className="h-3 w-3" />
-                USD/TWD = {usdRate.toFixed(2)}
-              </div>
+              <Group gap={4}>
+                <DollarSign size={12} color="var(--mantine-color-dimmed)" />
+                <Text size="xs" c="dimmed">USD/TWD = {usdRate.toFixed(2)}</Text>
+              </Group>
             )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
+          </Group>
+          <Group gap="xs">
+            <Button
+              variant="subtle"
+              color="gray"
+              size="xs"
+              leftSection={privacyMode ? <EyeOff size={14} /> : <Eye size={14} />}
               onClick={() => setPrivacyMode(!privacyMode)}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
             >
-              {privacyMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               {privacyMode ? '顯示金額' : '隱藏金額'}
-            </button>
-            <button
+            </Button>
+            <Button
+              color="teal"
+              leftSection={<Plus size={16} />}
               onClick={() => setShowAddModal(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 sm:w-auto"
             >
-              <Plus className="h-4 w-4" />
               新增持股
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Group>
+        </Group>
 
         <DndContext
           sensors={sensors}
@@ -267,12 +267,14 @@ export default function StocksPage() {
             privacyMode={privacyMode}
           />
         </DndContext>
-      </div>
+      </Stack>
 
       <Modal
-        isOpen={showAddModal}
+        opened={showAddModal}
         onClose={() => setShowAddModal(false)}
         title="新增持股"
+        size="lg"
+        centered
       >
         <AddStockForm
           onSubmit={handleAddStock}
@@ -281,9 +283,11 @@ export default function StocksPage() {
       </Modal>
 
       <Modal
-        isOpen={!!editingStock}
+        opened={!!editingStock}
         onClose={() => setEditingStock(null)}
         title="編輯持股"
+        size="lg"
+        centered
       >
         {editingStock && (
           <AddStockForm
@@ -300,9 +304,11 @@ export default function StocksPage() {
       </Modal>
 
       <Modal
-        isOpen={!!sellingStock}
+        opened={!!sellingStock}
         onClose={() => setSellingStock(null)}
         title="賣出股票"
+        size="lg"
+        centered
       >
         {sellingStock && (
           <SellStockForm
@@ -314,9 +320,11 @@ export default function StocksPage() {
       </Modal>
 
       <Modal
-        isOpen={!!historyStock}
+        opened={!!historyStock}
         onClose={() => setHistoryStock(null)}
         title="賣出歷史"
+        size="lg"
+        centered
       >
         {historyStock && (
           <SellHistoryList

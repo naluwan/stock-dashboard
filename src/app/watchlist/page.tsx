@@ -1,14 +1,27 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Header from '@/components/layout/Header';
-import { Market, PriceData } from '@/types';
-import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Card,
+  Center,
+  Collapse,
+  Group,
+  Loader,
+  ScrollArea,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  ThemeIcon,
+  UnstyledButton,
+} from '@mantine/core';
 import {
   Star,
   TrendingUp,
   TrendingDown,
-  Loader2,
   RefreshCw,
   DollarSign,
   GripVertical,
@@ -29,7 +42,10 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import Header from '@/components/layout/Header';
 import StockPriceChart from '@/components/dashboard/StockPriceChart';
+import { Market, PriceData } from '@/types';
+import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 
 interface FavoriteItem {
   _id: string;
@@ -44,13 +60,17 @@ interface FavoriteWithPrice extends FavoriteItem {
   price?: PriceData;
 }
 
+function MarketBadge({ market }: { market: Market }) {
+  return (
+    <Badge size="xs" variant="light" color={market === 'TW' ? 'blue' : 'violet'}>
+      {market}
+    </Badge>
+  );
+}
+
 /* ─── Sortable Card (手機版) ─── */
 function SortableCard({
-  item,
-  usdRate,
-  onRemove,
-  isExpanded,
-  onToggleExpand,
+  item, usdRate, onRemove, isExpanded, onToggleExpand,
 }: {
   item: FavoriteWithPrice;
   usdRate: number;
@@ -61,7 +81,6 @@ function SortableCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item._id,
   });
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -69,106 +88,101 @@ function SortableCard({
     zIndex: isDragging ? 50 : undefined,
     position: 'relative' as const,
   };
-
   const price = item.price;
   const isUp = (price?.change || 0) >= 0;
   const isUS = item.market === 'US';
-  const colorClass = isUp
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : 'text-red-600 dark:text-red-400';
 
   return (
-    <div
+    <Card
       ref={setNodeRef}
       style={style}
-      className={`rounded-xl bg-white shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 ${
-        isDragging ? 'ring-2 ring-emerald-400/50 shadow-lg' : ''
-      }`}
+      withBorder
+      radius="lg"
+      p={0}
+      shadow={isDragging ? 'md' : undefined}
     >
-      <div className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <button
+      <Box p="md">
+        <Group justify="space-between" wrap="nowrap" align="flex-start">
+          <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+            <ActionIcon
               {...attributes}
               {...listeners}
-              className="cursor-grab touch-none rounded p-0.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600 dark:hover:text-gray-400"
+              variant="transparent"
+              color="gray"
+              size="sm"
+              style={{ cursor: 'grab', touchAction: 'none' }}
               aria-label="拖拉排序"
             >
-              <GripVertical className="h-4 w-4" />
-            </button>
-            <span
-              className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                item.market === 'TW'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                  : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-              }`}
-            >
-              {item.market}
-            </span>
-            <button onClick={onToggleExpand} className="flex items-center gap-1 hover:opacity-70 transition-opacity">
-              <div>
-                <p className="font-medium text-gray-900 dark:text-white text-left">{item.symbol}</p>
-                <p className="text-xs text-gray-400 text-left">{item.name}</p>
-              </div>
-              <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-          <button
+              <GripVertical size={14} />
+            </ActionIcon>
+            <MarketBadge market={item.market} />
+            <UnstyledButton onClick={onToggleExpand} style={{ flex: 1, minWidth: 0 }}>
+              <Group gap={4} wrap="nowrap">
+                <div style={{ minWidth: 0 }}>
+                  <Text fw={500} truncate>{item.symbol}</Text>
+                  <Text size="xs" c="dimmed" truncate>{item.name}</Text>
+                </div>
+                <ChevronDown
+                  size={14}
+                  style={{
+                    color: 'var(--mantine-color-dimmed)',
+                    transform: isExpanded ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 0.2s',
+                    flexShrink: 0,
+                  }}
+                />
+              </Group>
+            </UnstyledButton>
+          </Group>
+          <ActionIcon
+            variant="subtle"
+            color="yellow"
             onClick={() => onRemove(item.symbol, item.market)}
-            className="rounded-full p-1 text-yellow-500 hover:text-red-500 transition-colors"
+            aria-label="移除自選"
           >
-            <Star className="h-4 w-4 fill-current" />
-          </button>
-        </div>
+            <Star size={16} fill="currentColor" />
+          </ActionIcon>
+        </Group>
+
         {price && (
-          <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+          <SimpleGrid cols={3} spacing="xs" mt="sm">
             <div>
-              <p className="text-[11px] text-gray-400">現價</p>
-              <p className="font-semibold text-gray-900 dark:text-white">
-                {formatCurrency(price.currentPrice, item.market)}
-              </p>
+              <Text size="11px" c="dimmed">現價</Text>
+              <Text fw={600}>{formatCurrency(price.currentPrice, item.market)}</Text>
               {isUS && usdRate > 0 && (
-                <p className="text-[10px] text-gray-400">
+                <Text size="10px" c="dimmed">
                   ≈ NT$ {formatNumber(price.currentPrice * usdRate, 0)}
-                </p>
+                </Text>
               )}
             </div>
             <div>
-              <p className="text-[11px] text-gray-400">漲跌</p>
-              <p className={`font-semibold ${colorClass}`}>
-                {isUp ? '+' : ''}
-                {price.change.toFixed(2)}
-              </p>
+              <Text size="11px" c="dimmed">漲跌</Text>
+              <Text fw={600} c={isUp ? 'teal' : 'red'}>
+                {isUp ? '+' : ''}{price.change.toFixed(2)}
+              </Text>
             </div>
             <div>
-              <p className="text-[11px] text-gray-400">漲跌幅</p>
-              <p className={`font-semibold ${colorClass}`}>{formatPercent(price.changePercent)}</p>
+              <Text size="11px" c="dimmed">漲跌幅</Text>
+              <Text fw={600} c={isUp ? 'teal' : 'red'}>
+                {formatPercent(price.changePercent)}
+              </Text>
             </div>
-          </div>
+          </SimpleGrid>
         )}
-      </div>
+      </Box>
 
-      {/* 展開：走勢圖 */}
-      <div
-        className={`overflow-hidden transition-all duration-300 ease-in-out ${
-          isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
-        }`}
-      >
-        <div className="border-t border-gray-100 dark:border-gray-700 p-4">
+      <Collapse expanded={isExpanded}>
+        <Box p="md" pt={0} style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
           <StockPriceChart symbol={item.symbol} market={item.market} currentPrice={price?.currentPrice} />
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Collapse>
+    </Card>
   );
 }
 
 /* ─── Sortable Table Row (桌面版) ─── */
 function SortableTableRow({
-  item,
-  usdRate,
-  onRemove,
-  isExpanded,
-  onToggleExpand,
+  item, usdRate, onRemove, isExpanded, onToggleExpand,
 }: {
   item: FavoriteWithPrice;
   usdRate: number;
@@ -179,7 +193,6 @@ function SortableTableRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item._id,
   });
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -187,103 +200,96 @@ function SortableTableRow({
     zIndex: isDragging ? 50 : undefined,
     position: 'relative' as const,
   };
-
   const price = item.price;
   const isUp = (price?.change || 0) >= 0;
   const isUS = item.market === 'US';
-  const colorClass = isUp
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : 'text-red-600 dark:text-red-400';
 
   return (
     <>
-      <tr
-        ref={setNodeRef}
-        style={style}
-        className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${
-          isDragging ? 'bg-emerald-50 shadow-lg dark:bg-emerald-900/20' : ''
-        }`}
-      >
-        <td className="w-8 px-1 py-3 sm:px-2">
-          <button
+      <Table.Tr ref={setNodeRef} style={style} bg={isDragging ? 'var(--mantine-color-teal-light)' : undefined}>
+        <Table.Td style={{ width: 32 }}>
+          <ActionIcon
             {...attributes}
             {...listeners}
-            className="cursor-grab touch-none rounded p-0.5 text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-gray-600 dark:hover:text-gray-400"
+            variant="transparent"
+            color="gray"
+            size="sm"
+            style={{ cursor: 'grab', touchAction: 'none' }}
             aria-label="拖拉排序"
           >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        </td>
-        <td className="px-4 py-3">
-          <button onClick={onToggleExpand} className="flex items-center gap-2 hover:opacity-70 transition-opacity text-left">
-            <span
-              className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                item.market === 'TW'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                  : 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-              }`}
-            >
-              {item.market}
-            </span>
-            <div>
-              <p className="font-medium text-gray-900 dark:text-white">{item.symbol}</p>
-              <p className="text-xs text-gray-400">{item.name}</p>
-            </div>
-            <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-          </button>
-        </td>
-        <td className="px-4 py-3 text-right">
-          <span className="font-medium text-gray-900 dark:text-white">
+            <GripVertical size={14} />
+          </ActionIcon>
+        </Table.Td>
+        <Table.Td>
+          <UnstyledButton onClick={onToggleExpand}>
+            <Group gap="xs" wrap="nowrap">
+              <MarketBadge market={item.market} />
+              <div>
+                <Text fw={500} size="sm">{item.symbol}</Text>
+                <Text size="xs" c="dimmed">{item.name}</Text>
+              </div>
+              <ChevronDown
+                size={14}
+                style={{
+                  color: 'var(--mantine-color-dimmed)',
+                  transform: isExpanded ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s',
+                }}
+              />
+            </Group>
+          </UnstyledButton>
+        </Table.Td>
+        <Table.Td ta="right">
+          <Text fw={500} size="sm">
             {price ? formatCurrency(price.currentPrice, item.market) : '—'}
-          </span>
+          </Text>
           {isUS && price && usdRate > 0 && (
-            <span className="block text-[10px] text-gray-400">
+            <Text size="10px" c="dimmed">
               ≈ NT$ {formatNumber(price.currentPrice * usdRate, 2)}
-            </span>
+            </Text>
           )}
-        </td>
-        <td className={`px-4 py-3 text-right font-medium ${colorClass}`}>
+        </Table.Td>
+        <Table.Td ta="right">
           {price ? (
-            <span className="flex items-center justify-end gap-1">
-              {isUp ? (
-                <TrendingUp className="h-3.5 w-3.5" />
-              ) : (
-                <TrendingDown className="h-3.5 w-3.5" />
-              )}
-              {isUp ? '+' : ''}
-              {price.change.toFixed(2)}
-            </span>
-          ) : (
-            '—'
-          )}
-        </td>
-        <td className={`px-4 py-3 text-right font-medium ${colorClass}`}>
-          {price ? `${isUp ? '+' : ''}${formatPercent(price.changePercent)}` : '—'}
-        </td>
-        <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">
-          {price ? formatCurrency(price.high, item.market) : '—'}
-        </td>
-        <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">
-          {price ? formatCurrency(price.low, item.market) : '—'}
-        </td>
-        <td className="px-4 py-3 text-center">
-          <button
+            <Group justify="flex-end" gap={4} c={isUp ? 'teal' : 'red'}>
+              {isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+              <Text fw={500} size="sm">{isUp ? '+' : ''}{price.change.toFixed(2)}</Text>
+            </Group>
+          ) : '—'}
+        </Table.Td>
+        <Table.Td ta="right">
+          <Text fw={500} size="sm" c={isUp ? 'teal' : 'red'}>
+            {price ? `${isUp ? '+' : ''}${formatPercent(price.changePercent)}` : '—'}
+          </Text>
+        </Table.Td>
+        <Table.Td ta="right">
+          <Text size="sm" c="dimmed">
+            {price ? formatCurrency(price.high, item.market) : '—'}
+          </Text>
+        </Table.Td>
+        <Table.Td ta="right">
+          <Text size="sm" c="dimmed">
+            {price ? formatCurrency(price.low, item.market) : '—'}
+          </Text>
+        </Table.Td>
+        <Table.Td ta="center">
+          <ActionIcon
+            variant="subtle"
+            color="yellow"
             onClick={() => onRemove(item.symbol, item.market)}
-            className="rounded-full p-1 text-yellow-500 hover:text-red-500 transition-colors"
-            title="移除自選"
+            aria-label="移除自選"
           >
-            <Star className="h-4 w-4 fill-current" />
-          </button>
-        </td>
-      </tr>
-      {/* 展開：走勢圖 */}
-      <tr className={`${isExpanded ? '' : 'hidden'}`}>
-        <td colSpan={8} className="px-4 pb-4 pt-0">
-          <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100' : 'opacity-0'}`}>
+            <Star size={16} fill="currentColor" />
+          </ActionIcon>
+        </Table.Td>
+      </Table.Tr>
+      {isExpanded && (
+        <Table.Tr>
+          <Table.Td colSpan={8} p="md" pt={0}>
             <StockPriceChart symbol={item.symbol} market={item.market} currentPrice={price?.currentPrice} />
-          </div>
-        </td>
-      </tr>
+          </Table.Td>
+        </Table.Tr>
+      )}
     </>
   );
 }
@@ -297,13 +303,32 @@ export default function WatchlistPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
+  };
+
+  const fetchPrices = async (items: FavoriteItem[]) => {
+    setIsRefreshing(true);
+    const updated: FavoriteWithPrice[] = [...items];
+
+    const promises = items.map(async (item, index) => {
+      try {
+        const res = await fetch(
+          `/api/search?q=${encodeURIComponent(item.symbol)}&market=${item.market}&action=quote`,
+        );
+        if (res.ok) {
+          const price: PriceData = await res.json();
+          updated[index] = { ...updated[index], price };
+        }
+      } catch { /* ignore */ }
+    });
+
+    await Promise.all(promises);
+    setFavorites([...updated]);
+    setIsRefreshing(false);
   };
 
   const loadFavorites = useCallback(async () => {
@@ -316,9 +341,7 @@ export default function WatchlistPage() {
       try {
         const rateData = await rateRes.json();
         setUsdRate(rateData.rate || 0);
-      } catch {
-        /* ignore */
-      }
+      } catch { /* ignore */ }
 
       if (res.ok) {
         const data: FavoriteItem[] = await res.json();
@@ -332,42 +355,15 @@ export default function WatchlistPage() {
     }
   }, []);
 
-  const fetchPrices = async (items: FavoriteItem[]) => {
-    setIsRefreshing(true);
-    const updated: FavoriteWithPrice[] = [...items];
-
-    const promises = items.map(async (item, index) => {
-      try {
-        const res = await fetch(
-          `/api/search?q=${encodeURIComponent(item.symbol)}&market=${item.market}&action=quote`
-        );
-        if (res.ok) {
-          const price: PriceData = await res.json();
-          updated[index] = { ...updated[index], price };
-        }
-      } catch {
-        /* ignore */
-      }
-    });
-
-    await Promise.all(promises);
-    setFavorites([...updated]);
-    setIsRefreshing(false);
-  };
-
   useEffect(() => {
     loadFavorites();
   }, [loadFavorites]);
 
   const removeFavorite = async (symbol: string, market: Market) => {
     try {
-      await fetch(`/api/favorites?symbol=${encodeURIComponent(symbol)}&market=${market}`, {
-        method: 'DELETE',
-      });
+      await fetch(`/api/favorites?symbol=${encodeURIComponent(symbol)}&market=${market}`, { method: 'DELETE' });
       setFavorites((prev) => prev.filter((f) => !(f.symbol === symbol && f.market === market)));
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   };
 
   const handleRefresh = () => {
@@ -382,11 +378,9 @@ export default function WatchlistPage() {
     const newIndex = favorites.findIndex((f) => f._id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    // Optimistic update
     const reordered = arrayMove(favorites, oldIndex, newIndex);
     setFavorites(reordered);
 
-    // Persist to DB
     try {
       const orderedIds = reordered.map((f) => f._id);
       await fetch('/api/favorites/reorder', {
@@ -404,9 +398,9 @@ export default function WatchlistPage() {
     return (
       <div>
         <Header title="自選股票" subtitle="追蹤你關注的股票" />
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-        </div>
+        <Center py={96}>
+          <Loader color="teal" />
+        </Center>
       </div>
     );
   }
@@ -421,39 +415,43 @@ export default function WatchlistPage() {
         onRefresh={handleRefresh}
       />
 
-      <div className="p-4 sm:p-6">
+      <Stack p={{ base: 'md', sm: 'xl' }} gap="md">
         {usdRate > 0 && (
-          <div className="mb-3 flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
-            <DollarSign className="h-3 w-3" />
-            USD/TWD = {usdRate.toFixed(2)}
-          </div>
+          <Group gap={4}>
+            <DollarSign size={12} color="var(--mantine-color-dimmed)" />
+            <Text size="xs" c="dimmed">USD/TWD = {usdRate.toFixed(2)}</Text>
+          </Group>
         )}
 
         {favorites.length === 0 ? (
-          <div className="rounded-xl bg-white p-10 text-center shadow-sm border border-gray-200 sm:p-16 dark:bg-gray-800 dark:border-gray-700">
-            <Star className="mx-auto h-10 w-10 text-gray-300 sm:h-12 sm:w-12 dark:text-gray-600" />
-            <p className="mt-3 text-gray-400 text-base sm:text-lg">尚無自選股票</p>
-            <p className="text-gray-400 text-xs mt-1 sm:text-sm">
-              在股票搜尋頁面點擊星號即可加入自選
-            </p>
-          </div>
+          <Card withBorder radius="lg" p="xl">
+            <Center>
+              <Stack align="center" gap={4}>
+                <ThemeIcon size={56} radius="xl" variant="light" color="gray">
+                  <Star size={28} />
+                </ThemeIcon>
+                <Text c="dimmed" size="lg">尚無自選股票</Text>
+                <Text c="dimmed" size="sm">在股票搜尋頁面點擊星號即可加入自選</Text>
+              </Stack>
+            </Center>
+          </Card>
         ) : (
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <div className="space-y-3">
+            <Stack gap="sm">
               {isRefreshing && (
-                <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  正在更新報價...
-                </div>
+                <Group justify="center" gap={6}>
+                  <RefreshCw size={14} color="var(--mantine-color-dimmed)" />
+                  <Text size="sm" c="dimmed">正在更新報價...</Text>
+                </Group>
               )}
 
-              {/* 手機版：卡片布局 */}
-              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-                <div className="space-y-3 md:hidden">
+              {/* 手機版：卡片 */}
+              <Stack gap="sm" hiddenFrom="md">
+                <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                   {favorites.map((item) => (
                     <SortableCard
                       key={item._id}
@@ -464,44 +462,27 @@ export default function WatchlistPage() {
                       onToggleExpand={() => toggleExpand(item._id)}
                     />
                   ))}
-                </div>
-              </SortableContext>
+                </SortableContext>
+              </Stack>
 
-              {/* 桌面版：表格布局 */}
-              <div className="hidden md:block rounded-xl bg-white shadow-sm border border-gray-200 dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                        <th className="w-8 px-1 py-3 sm:px-2"></th>
-                        <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">
-                          股票
-                        </th>
-                        <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
-                          現價
-                        </th>
-                        <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
-                          漲跌
-                        </th>
-                        <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
-                          漲跌幅
-                        </th>
-                        <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
-                          最高
-                        </th>
-                        <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">
-                          最低
-                        </th>
-                        <th className="px-4 py-3 text-center font-medium text-gray-500 dark:text-gray-400">
-                          操作
-                        </th>
-                      </tr>
-                    </thead>
-                    <SortableContext
-                      items={sortableIds}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              {/* 桌面版：表格 */}
+              <Card withBorder radius="lg" p={0} visibleFrom="md">
+                <ScrollArea>
+                  <Table verticalSpacing="sm" highlightOnHover>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th style={{ width: 32 }} />
+                        <Table.Th>股票</Table.Th>
+                        <Table.Th ta="right">現價</Table.Th>
+                        <Table.Th ta="right">漲跌</Table.Th>
+                        <Table.Th ta="right">漲跌幅</Table.Th>
+                        <Table.Th ta="right">最高</Table.Th>
+                        <Table.Th ta="right">最低</Table.Th>
+                        <Table.Th ta="center">操作</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                      <Table.Tbody>
                         {favorites.map((item) => (
                           <SortableTableRow
                             key={item._id}
@@ -512,15 +493,15 @@ export default function WatchlistPage() {
                             onToggleExpand={() => toggleExpand(item._id)}
                           />
                         ))}
-                      </tbody>
+                      </Table.Tbody>
                     </SortableContext>
-                  </table>
-                </div>
-              </div>
-            </div>
+                  </Table>
+                </ScrollArea>
+              </Card>
+            </Stack>
           </DndContext>
         )}
-      </div>
+      </Stack>
     </div>
   );
 }

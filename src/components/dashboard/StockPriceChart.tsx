@@ -13,7 +13,8 @@ import {
   Cell,
   ReferenceLine,
 } from 'recharts';
-import { TrendingUp, BarChart3, Loader2 } from 'lucide-react';
+import { Card, Center, Group, Loader, SegmentedControl, Stack, Text } from '@mantine/core';
+import { TrendingUp, BarChart3 } from 'lucide-react';
 import { Market } from '@/types';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 
@@ -49,14 +50,12 @@ const TIME_OPTIONS: TimeOption[] = [
   { key: '1y', label: '年', days: 365, intraday: false },
 ];
 
-// 格式化成交量（萬/億）
 function formatVolume(v: number): string {
   if (v >= 1_0000_0000) return `${(v / 1_0000_0000).toFixed(1)}億`;
   if (v >= 1_0000) return `${(v / 1_0000).toFixed(0)}萬`;
   return formatNumber(v, 0);
 }
 
-// 自訂 Tooltip 內容
 function CustomTooltip({
   active,
   payload,
@@ -76,24 +75,28 @@ function CustomTooltip({
   const d = payload[0].payload;
 
   return (
-    <div className="rounded-lg bg-gray-800 px-3 py-2 text-xs text-white shadow-lg">
-      <p className="mb-1 text-gray-400">
-        {timeLabel}: {label}
-      </p>
+    <Card withBorder shadow="md" radius="md" p="xs" bg="var(--mantine-color-body)">
+      <Text size="xs" c="dimmed" mb={4}>{timeLabel}: {label}</Text>
       {mode === 'candlestick' ? (
         <>
-          <p>開盤: {formatCurrency(d.open as number, market)}</p>
-          <p>最高: {formatCurrency(d.high as number, market)}</p>
-          <p>最低: {formatCurrency(d.low as number, market)}</p>
-          <p>收盤: {formatCurrency(d.close as number, market)}</p>
+          <Text size="xs">開盤: {formatCurrency(d.open as number, market)}</Text>
+          <Text size="xs">最高: {formatCurrency(d.high as number, market)}</Text>
+          <Text size="xs">最低: {formatCurrency(d.low as number, market)}</Text>
+          <Text size="xs">收盤: {formatCurrency(d.close as number, market)}</Text>
         </>
       ) : (
-        <p>收盤: {formatCurrency(d.close as number, market)}</p>
+        <Text size="xs">收盤: {formatCurrency(d.close as number, market)}</Text>
       )}
-      <p className="mt-1 border-t border-gray-600 pt-1 text-gray-300">
+      <Text
+        size="xs"
+        c="dimmed"
+        mt={4}
+        pt={4}
+        style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}
+      >
         成交量: {formatVolume(d.volume as number)}
-      </p>
-    </div>
+      </Text>
+    </Card>
   );
 }
 
@@ -135,46 +138,50 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
     fetchHistory();
   }, [symbol, market, selectedTime, currentTimeOption.days, currentTimeOption.intraday]);
 
-  // 時間範圍切換按鈕
-  const TimeSelector = () => (
-    <div className="flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-700">
-      {TIME_OPTIONS.map((opt) => (
-        <button
-          key={opt.key}
-          onClick={() => setSelectedTime(opt.key)}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-            selectedTime === opt.key
-              ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-600 dark:text-white'
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
+  const timeSelector = (
+    <SegmentedControl
+      size="xs"
+      value={selectedTime}
+      onChange={setSelectedTime}
+      data={TIME_OPTIONS.map((o) => ({ value: o.key, label: o.label }))}
+    />
+  );
+
+  const modeSelector = (
+    <SegmentedControl
+      size="xs"
+      value={mode}
+      onChange={(v) => setMode(v as ChartMode)}
+      data={[
+        { value: 'line', label: <TrendingUp size={14} /> },
+        { value: 'candlestick', label: <BarChart3 size={14} /> },
+      ]}
+    />
   );
 
   if (isLoading) {
     return (
-      <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
-        </div>
-      </div>
+      <Card withBorder radius="lg" p="md">
+        <Center h={260}>
+          <Loader color="teal" size="sm" />
+        </Center>
+      </Card>
     );
   }
 
   if (data.length === 0) {
     return (
-      <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium text-gray-900 dark:text-white">價格走勢</h3>
-          <TimeSelector />
-        </div>
-        <div className="flex items-center justify-center h-64 text-gray-400">
-          {currentTimeOption.intraday ? '目前無當日分時資料（可能非交易時間）' : '暫無歷史資料'}
-        </div>
-      </div>
+      <Card withBorder radius="lg" p="md">
+        <Group justify="space-between" mb="md" wrap="wrap" gap="xs">
+          <Text fw={500}>價格走勢</Text>
+          {timeSelector}
+        </Group>
+        <Center h={260}>
+          <Text c="dimmed" size="sm">
+            {currentTimeOption.intraday ? '目前無當日分時資料（可能非交易時間）' : '暫無歷史資料'}
+          </Text>
+        </Center>
+      </Card>
     );
   }
 
@@ -183,214 +190,210 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
   const minPrice = rawMin * 0.998;
   const maxPrice = rawMax * 1.002;
   const priceRange = rawMax - rawMin;
-  // 價格範圍小時顯示更多小數位
   const yDecimals = priceRange < 1 ? 2 : priceRange < 10 ? 1 : 0;
   const avgPrice = data.reduce((sum, d) => sum + d.close, 0) / data.length;
   const maxVolume = Math.max(...data.map((d) => d.volume));
 
-  // K 線圖需要的資料
   const chartData = data.map((d) => ({
     ...d,
     isUp: d.close >= d.open,
     bodyLow: Math.min(d.open, d.close),
     bodyHigh: Math.max(d.open, d.close),
-    bodyHeight: Math.abs(d.close - d.open) || 0.01, // 避免零高度
+    bodyHeight: Math.abs(d.close - d.open) || 0.01,
   }));
 
   const isIntraday = currentTimeOption.intraday && !isFallback;
   const timeLabel = isIntraday ? '時間' : '日期';
 
   return (
-    <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <h3 className="font-medium text-gray-900 dark:text-white">價格走勢</h3>
-          {isIntraday && (
-            <span className="text-[10px] text-gray-400 dark:text-gray-500">
-              {market === 'US' ? '(美東時間)' : '(台灣時間)'}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <TimeSelector />
-          {/* 圖表模式切換 */}
-          <div className="flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-700">
-            <button
-              onClick={() => setMode('line')}
-              className={`rounded-md p-1.5 transition-colors ${
-                mode === 'line'
-                  ? 'bg-white text-emerald-600 shadow-sm dark:bg-gray-600 dark:text-emerald-400'
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-              title="走勢圖"
-            >
-              <TrendingUp className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setMode('candlestick')}
-              className={`rounded-md p-1.5 transition-colors ${
-                mode === 'candlestick'
-                  ? 'bg-white text-emerald-600 shadow-sm dark:bg-gray-600 dark:text-emerald-400'
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-              title="K 線圖"
-            >
-              <BarChart3 className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
+    <Card withBorder radius="lg" p="md">
+      <Stack gap="sm">
+        <Group justify="space-between" wrap="wrap" gap="xs">
+          <Group gap="xs">
+            <Text fw={500}>價格走勢</Text>
+            {isIntraday && (
+              <Text size="10px" c="dimmed">
+                {market === 'US' ? '(美東時間)' : '(台灣時間)'}
+              </Text>
+            )}
+          </Group>
+          <Group gap="xs" wrap="wrap">
+            {timeSelector}
+            {modeSelector}
+          </Group>
+        </Group>
 
-      {isFallback && (
-        <p className="mb-3 text-center text-xs text-amber-500 dark:text-amber-400">
-          非交易時間，顯示最近交易日資料
-        </p>
-      )}
+        {isFallback && (
+          <Text ta="center" size="xs" c="yellow">
+            非交易時間，顯示最近交易日資料
+          </Text>
+        )}
 
-      {/* 合併圖表：價格 + 成交量 */}
-      <div className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
-            <XAxis
-              dataKey="date"
-              tick={{ fontSize: 10, fill: '#9CA3AF' }}
-              tickLine={false}
-              axisLine={false}
-              interval={Math.max(0, Math.floor(data.length / 6))}
-            />
-            {/* 左側 Y 軸：價格 */}
-            <YAxis
-              yAxisId="price"
-              domain={[minPrice, maxPrice]}
-              tick={{ fontSize: 10, fill: '#9CA3AF' }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v: number) => v.toFixed(yDecimals)}
-              width={60}
-            />
-            {/* 右側 Y 軸：成交量（隱藏刻度，只用來定位） */}
-            <YAxis
-              yAxisId="volume"
-              orientation="right"
-              domain={[0, maxVolume * 5]}
-              tick={false}
-              tickLine={false}
-              axisLine={false}
-              width={0}
-            />
-            <Tooltip
-              content={
-                <CustomTooltip market={market} timeLabel={timeLabel} mode={mode} />
-              }
-            />
+        <div style={{ height: 320 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--mantine-color-default-border)" opacity={0.4} />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: 'var(--mantine-color-dimmed)' }}
+                tickLine={false}
+                axisLine={false}
+                interval={Math.max(0, Math.floor(data.length / 6))}
+              />
+              <YAxis
+                yAxisId="price"
+                domain={[minPrice, maxPrice]}
+                tick={{ fontSize: 10, fill: 'var(--mantine-color-dimmed)' }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v: number) => v.toFixed(yDecimals)}
+                width={60}
+              />
+              <YAxis
+                yAxisId="volume"
+                orientation="right"
+                domain={[0, maxVolume * 5]}
+                tick={false}
+                tickLine={false}
+                axisLine={false}
+                width={0}
+              />
+              <Tooltip
+                content={<CustomTooltip market={market} timeLabel={timeLabel} mode={mode} />}
+              />
 
-            {/* 成交量柱狀圖（底部，半透明） */}
-            <Bar yAxisId="volume" dataKey="volume" barSize={data.length > 60 ? 2 : data.length > 20 ? 4 : 6} opacity={0.4}>
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`vol-${index}`}
-                  fill={entry.isUp ? '#ef4444' : '#22c55e'}
-                />
-              ))}
-            </Bar>
+              <Bar
+                yAxisId="volume"
+                dataKey="volume"
+                barSize={data.length > 60 ? 2 : data.length > 20 ? 4 : 6}
+                opacity={0.4}
+              >
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`vol-${index}`}
+                    fill={entry.isUp ? 'var(--mantine-color-red-6)' : 'var(--mantine-color-green-6)'}
+                  />
+                ))}
+              </Bar>
 
-            {mode === 'candlestick' ? (
-              <>
-                {/* K 線上影線（high）和下影線（low）— 用細 Bar 模擬 */}
-                <Bar yAxisId="price" dataKey="high" fill="transparent" barSize={1}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`wick-h-${index}`} fill={entry.isUp ? '#ef4444' : '#22c55e'} />
-                  ))}
-                </Bar>
-                <Bar yAxisId="price" dataKey="low" fill="transparent" barSize={1}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`wick-l-${index}`} fill={entry.isUp ? '#ef4444' : '#22c55e'} />
-                  ))}
-                </Bar>
-                {/* K 線柱體 */}
-                <Bar yAxisId="price" dataKey="bodyHeight" stackId="candle" barSize={data.length > 60 ? 3 : data.length > 20 ? 5 : 8}>
-                  {chartData.map((entry, index) => (
-                    <Cell
-                      key={`body-${index}`}
-                      fill={entry.isUp ? '#ef4444' : '#22c55e'}
-                    />
-                  ))}
-                </Bar>
-                {/* 收盤線（淡灰色虛線） */}
-                <Line
-                  yAxisId="price"
-                  type="monotone"
-                  dataKey="close"
-                  stroke="#9CA3AF"
-                  strokeWidth={1}
-                  strokeDasharray="3 3"
-                  dot={false}
-                />
-              </>
-            ) : (
-              <>
-                {/* 收盤價走勢線 */}
-                <Line
-                  yAxisId="price"
-                  type="monotone"
-                  dataKey="close"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, fill: '#10b981' }}
-                />
-                {/* 均線 */}
+              {mode === 'candlestick' ? (
+                <>
+                  <Bar yAxisId="price" dataKey="high" fill="transparent" barSize={1}>
+                    {chartData.map((entry, index) => (
+                      <Cell
+                        key={`wick-h-${index}`}
+                        fill={entry.isUp ? 'var(--mantine-color-red-6)' : 'var(--mantine-color-green-6)'}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar yAxisId="price" dataKey="low" fill="transparent" barSize={1}>
+                    {chartData.map((entry, index) => (
+                      <Cell
+                        key={`wick-l-${index}`}
+                        fill={entry.isUp ? 'var(--mantine-color-red-6)' : 'var(--mantine-color-green-6)'}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar
+                    yAxisId="price"
+                    dataKey="bodyHeight"
+                    stackId="candle"
+                    barSize={data.length > 60 ? 3 : data.length > 20 ? 5 : 8}
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell
+                        key={`body-${index}`}
+                        fill={entry.isUp ? 'var(--mantine-color-red-6)' : 'var(--mantine-color-green-6)'}
+                      />
+                    ))}
+                  </Bar>
+                  <Line
+                    yAxisId="price"
+                    type="monotone"
+                    dataKey="close"
+                    stroke="var(--mantine-color-dimmed)"
+                    strokeWidth={1}
+                    strokeDasharray="3 3"
+                    dot={false}
+                  />
+                </>
+              ) : (
+                <>
+                  <Line
+                    yAxisId="price"
+                    type="monotone"
+                    dataKey="close"
+                    stroke="var(--mantine-color-teal-6)"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4, fill: 'var(--mantine-color-teal-6)' }}
+                  />
+                  <ReferenceLine
+                    yAxisId="price"
+                    y={avgPrice}
+                    stroke="var(--mantine-color-indigo-6)"
+                    strokeDasharray="3 3"
+                    strokeWidth={1}
+                    label={{ value: '均線', position: 'right', fill: 'var(--mantine-color-indigo-6)', fontSize: 10 }}
+                  />
+                </>
+              )}
+
+              {currentPrice && (
                 <ReferenceLine
                   yAxisId="price"
-                  y={avgPrice}
-                  stroke="#6366f1"
-                  strokeDasharray="3 3"
+                  y={currentPrice}
+                  stroke="var(--mantine-color-teal-6)"
+                  strokeDasharray="5 5"
                   strokeWidth={1}
-                  label={{ value: '均線', position: 'right', fill: '#6366f1', fontSize: 10 }}
                 />
-              </>
-            )}
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
 
-            {/* 現價參考線 */}
-            {currentPrice && (
-              <ReferenceLine
-                yAxisId="price"
-                y={currentPrice}
-                stroke="#10b981"
-                strokeDasharray="5 5"
-                strokeWidth={1}
-              />
-            )}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* 圖例 */}
-      <div className="mt-3 flex items-center justify-center gap-6 text-xs text-gray-500 dark:text-gray-400">
-        {mode === 'line' ? (
-          <>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-0.5 w-4 bg-emerald-500" /> 收盤價
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-0.5 w-4 bg-indigo-500" style={{ borderTop: '1px dashed' }} /> 均線
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-3 w-2 rounded-sm bg-red-500" /> 上漲
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-3 w-2 rounded-sm bg-green-500" /> 下跌
-            </span>
-          </>
-        )}
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-2 rounded-sm bg-gray-400 opacity-40" /> 成交量
-        </span>
-      </div>
-    </div>
+        <Group justify="center" gap="lg">
+          {mode === 'line' ? (
+            <>
+              <Group gap={4}>
+                <div
+                  style={{
+                    width: 16,
+                    height: 2,
+                    background: 'var(--mantine-color-teal-6)',
+                  }}
+                />
+                <Text size="xs" c="dimmed">收盤價</Text>
+              </Group>
+              <Group gap={4}>
+                <div
+                  style={{
+                    width: 16,
+                    height: 0,
+                    borderTop: '1px dashed var(--mantine-color-indigo-6)',
+                  }}
+                />
+                <Text size="xs" c="dimmed">均線</Text>
+              </Group>
+            </>
+          ) : (
+            <>
+              <Group gap={4}>
+                <div style={{ width: 8, height: 12, background: 'var(--mantine-color-red-6)', borderRadius: 2 }} />
+                <Text size="xs" c="dimmed">上漲</Text>
+              </Group>
+              <Group gap={4}>
+                <div style={{ width: 8, height: 12, background: 'var(--mantine-color-green-6)', borderRadius: 2 }} />
+                <Text size="xs" c="dimmed">下跌</Text>
+              </Group>
+            </>
+          )}
+          <Group gap={4}>
+            <div style={{ width: 8, height: 12, background: 'var(--mantine-color-gray-5)', opacity: 0.4, borderRadius: 2 }} />
+            <Text size="xs" c="dimmed">成交量</Text>
+          </Group>
+        </Group>
+      </Stack>
+    </Card>
   );
 }
