@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { calculateIndicators, OHLCV } from '@/lib/technical-indicators';
 import { Market } from '@/types';
-
-// 強制 Vercel function 跑在美國，避免亞洲節點被 Gemini 地區封鎖
-export const preferredRegion = 'iad1';
 
 async function fetchHistoricalData(symbol: string, market: Market): Promise<OHLCV[]> {
   const yahooSymbol = market === 'TW' ? `${symbol}.TW` : symbol;
@@ -194,18 +190,31 @@ export async function POST(request: NextRequest) {
     const indicators = calculateIndicators(candles);
     const prompt = buildPrompt(symbol, name || symbol, market as Market, indicators);
 
-    // 3. 呼叫 Gemini
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-    const result = await model.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [{ text: `你是一位專業的台灣股票技術分析師，擅長使用多種技術指標和投資策略進行分析。請用繁體中文回答。\n\n${prompt}` }],
-      }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
-    });
+    // 3. 呼叫 Gemini（直接用 fetch 繞過 SDK 地區偵測）
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [{ text: `你是一位專業的台灣股票技術分析師，擅長使用多種技術指標和投資策略進行分析。請用繁體中文回答。\n\n${prompt}` }],
+          }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+        }),
+      }
+    );
 
-    const analysis = result.response.text() || '分析失敗';
+    if (!geminiRes.ok) {
+      const errData = await geminiRes.json().catch(() => ({}));
+      console.error('Gemini API error:', JSON.stringify(errData));
+      const errMsg = errData?.error?.message || `Gemini API 錯誤 (${geminiRes.status})`;
+      return NextResponse.json({ error: errMsg }, { status: geminiRes.status });
+    }
+
+    const geminiData = await geminiRes.json();
+    const analysis = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '分析失敗';
 
     return NextResponse.json({
       analysis,
