@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
             role: 'user',
             parts: [{ text: `你是一位專業的台灣股票技術分析師，擅長使用多種技術指標和投資策略進行分析。請用繁體中文回答。\n\n${prompt}` }],
           }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 8000 },
         }),
       }
     );

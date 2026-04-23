@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { BrainCircuit, Loader2, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface StockAnalysisProps {
   symbol: string;
@@ -104,7 +105,7 @@ export default function StockAnalysis({ symbol, name, market }: StockAnalysisPro
 
         {analysis && (
           <div className="prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-th:bg-gray-100 dark:prose-th:bg-gray-800 prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1 prose-td:border prose-th:border prose-td:border-gray-200 dark:prose-td:border-gray-700 prose-th:border-gray-200 dark:prose-th:border-gray-700">
-            <ReactMarkdown>{analysis}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{analysis}</ReactMarkdown>
           </div>
         )}
       </div>
