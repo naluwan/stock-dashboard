@@ -174,9 +174,9 @@ ${indicators.recentCandles.map(c => `${c.date}：收${c.close}，量${c.volume}�
 
 export async function POST(request: NextRequest) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: '未設定 GEMINI_API_KEY' }, { status: 500 });
+      return NextResponse.json({ error: '未設定 OPENAI_API_KEY' }, { status: 500 });
     }
 
     const { symbol, name, market } = await request.json();
@@ -194,32 +194,33 @@ export async function POST(request: NextRequest) {
     const indicators = calculateIndicators(candles);
     const prompt = buildPrompt(symbol, name || symbol, market as Market, indicators);
 
-    // 3. 呼叫 Gemini（直接用 fetch）
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            role: 'user',
-            parts: [{ text: `你是一位專業的台灣股票技術分析師，擅長使用多種技術指標和投資策略進行分析。請用繁體中文回答。\n\n${prompt}` }],
-          }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 8000 },
-        }),
-      }
-    );
+    // 3. 呼叫 OpenAI（直接用 fetch）
+    const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: '你是一位專業的台灣股票技術分析師，擅長使用多種技術指標和投資策略進行分析。請用繁體中文回答。' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 8000,
+      }),
+    });
 
-    if (!geminiRes.ok) {
-      const errData = await geminiRes.json().catch(() => ({}));
-      const keyPrefix = apiKey.substring(0, 10);
-      console.error('Gemini API error:', JSON.stringify(errData), 'key prefix:', keyPrefix);
-      const errMsg = `${errData?.error?.message || `Gemini API 錯誤 (${geminiRes.status})`} [key: ${keyPrefix}...]`;
-      return NextResponse.json({ error: errMsg }, { status: geminiRes.status });
+    if (!openaiRes.ok) {
+      const errData = await openaiRes.json().catch(() => ({}));
+      console.error('OpenAI API error:', JSON.stringify(errData));
+      const errMsg = errData?.error?.message || `OpenAI API 錯誤 (${openaiRes.status})`;
+      return NextResponse.json({ error: errMsg }, { status: openaiRes.status });
     }
 
-    const geminiData = await geminiRes.json();
-    const analysis = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '分析失敗';
+    const openaiData = await openaiRes.json();
+    const analysis = openaiData?.choices?.[0]?.message?.content || '分析失敗';
 
     return NextResponse.json({
       analysis,
