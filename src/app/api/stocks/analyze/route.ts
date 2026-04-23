@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { calculateIndicators, OHLCV } from '@/lib/technical-indicators';
 import { Market } from '@/types';
 
+export const runtime = 'edge';
+export const preferredRegion = 'iad1';
+
 
 async function fetchHistoricalData(symbol: string, market: Market): Promise<OHLCV[]> {
   const yahooSymbol = market === 'TW' ? `${symbol}.TW` : symbol;
