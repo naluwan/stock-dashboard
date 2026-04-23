@@ -32,9 +32,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
-import { Market, PriceData } from '@/types';
-import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
+import { IStock, Market, PriceData } from '@/types';
+import { enrichStockWithCalculations, formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import StockPriceChart from '@/components/dashboard/StockPriceChart';
+import StockAnalysis from '@/components/stocks/StockAnalysis';
 
 interface SearchResult {
   symbol: string;
@@ -59,6 +60,7 @@ export default function SearchPage() {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [searchHistory, setSearchHistory] = useState<HistoryItem[]>([]);
   const [favoriteSymbols, setFavoriteSymbols] = useState<Set<string>>(new Set());
+  const [ownedMap, setOwnedMap] = useState<Map<string, IStock>>(new Map());
 
   const loadHistory = useCallback(async () => {
     try {
@@ -77,10 +79,23 @@ export default function SearchPage() {
     } catch { /* ignore */ }
   }, []);
 
+  const loadOwnedStocks = useCallback(async () => {
+    try {
+      const res = await fetch('/api/stocks');
+      if (res.ok) {
+        const data: IStock[] = await res.json();
+        const map = new Map<string, IStock>();
+        data.forEach((s) => map.set(`${s.market}_${s.symbol}`, s));
+        setOwnedMap(map);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     loadHistory();
     loadFavorites();
-  }, [loadHistory, loadFavorites]);
+    loadOwnedStocks();
+  }, [loadHistory, loadFavorites, loadOwnedStocks]);
 
   const saveSearchHistory = async (symbol: string, name: string, stockMarket: Market) => {
     try {
@@ -366,6 +381,25 @@ export default function SearchPage() {
               market={selectedQuote.market}
               currentPrice={selectedQuote.currentPrice}
             />
+
+            {(() => {
+              const owned = ownedMap.get(`${selectedQuote.market}_${selectedQuote.symbol}`);
+              const enriched = owned
+                ? enrichStockWithCalculations(owned, selectedQuote.currentPrice)
+                : null;
+              return (
+                <StockAnalysis
+                  symbol={selectedQuote.symbol}
+                  name={selectedQuote.name}
+                  market={selectedQuote.market}
+                  currentPrice={selectedQuote.currentPrice}
+                  averagePrice={enriched?.averagePrice}
+                  totalShares={enriched?.totalShares}
+                  totalProfit={enriched?.totalProfit}
+                  totalProfitPercent={enriched?.totalProfitPercent}
+                />
+              );
+            })()}
 
             <Group justify="center" gap={6}>
               <Clock size={12} color="var(--mantine-color-dimmed)" />

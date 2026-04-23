@@ -44,8 +44,9 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import Header from '@/components/layout/Header';
 import StockPriceChart from '@/components/dashboard/StockPriceChart';
-import { Market, PriceData } from '@/types';
-import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
+import StockAnalysis from '@/components/stocks/StockAnalysis';
+import { IStock, Market, PriceData, StockWithCalculations } from '@/types';
+import { enrichStockWithCalculations, formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 
 interface FavoriteItem {
   _id: string;
@@ -70,13 +71,14 @@ function MarketBadge({ market }: { market: Market }) {
 
 /* ─── Sortable Card (手機版) ─── */
 function SortableCard({
-  item, usdRate, onRemove, isExpanded, onToggleExpand,
+  item, usdRate, onRemove, isExpanded, onToggleExpand, ownedStock,
 }: {
   item: FavoriteWithPrice;
   usdRate: number;
   onRemove: (symbol: string, market: Market) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  ownedStock: StockWithCalculations | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item._id,
@@ -173,7 +175,19 @@ function SortableCard({
 
       <Collapse expanded={isExpanded}>
         <Box p="md" pt={0} style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
-          <StockPriceChart symbol={item.symbol} market={item.market} currentPrice={price?.currentPrice} />
+          <Stack gap="sm">
+            <StockPriceChart symbol={item.symbol} market={item.market} currentPrice={price?.currentPrice} />
+            <StockAnalysis
+              symbol={item.symbol}
+              name={item.name}
+              market={item.market}
+              currentPrice={price?.currentPrice}
+              averagePrice={ownedStock?.averagePrice}
+              totalShares={ownedStock?.totalShares}
+              totalProfit={ownedStock?.totalProfit}
+              totalProfitPercent={ownedStock?.totalProfitPercent}
+            />
+          </Stack>
         </Box>
       </Collapse>
     </Card>
@@ -182,13 +196,14 @@ function SortableCard({
 
 /* ─── Sortable Table Row (桌面版) ─── */
 function SortableTableRow({
-  item, usdRate, onRemove, isExpanded, onToggleExpand,
+  item, usdRate, onRemove, isExpanded, onToggleExpand, ownedStock,
 }: {
   item: FavoriteWithPrice;
   usdRate: number;
   onRemove: (symbol: string, market: Market) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  ownedStock: StockWithCalculations | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item._id,
@@ -286,7 +301,19 @@ function SortableTableRow({
       {isExpanded && (
         <Table.Tr>
           <Table.Td colSpan={8} p="md" pt={0}>
-            <StockPriceChart symbol={item.symbol} market={item.market} currentPrice={price?.currentPrice} />
+            <Stack gap="sm">
+              <StockPriceChart symbol={item.symbol} market={item.market} currentPrice={price?.currentPrice} />
+              <StockAnalysis
+                symbol={item.symbol}
+                name={item.name}
+                market={item.market}
+                currentPrice={price?.currentPrice}
+                averagePrice={ownedStock?.averagePrice}
+                totalShares={ownedStock?.totalShares}
+                totalProfit={ownedStock?.totalProfit}
+                totalProfitPercent={ownedStock?.totalProfitPercent}
+              />
+            </Stack>
           </Table.Td>
         </Table.Tr>
       )}
@@ -301,6 +328,15 @@ export default function WatchlistPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [usdRate, setUsdRate] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [ownedMap, setOwnedMap] = useState<Map<string, IStock>>(new Map());
+
+  const getOwnedStock = useCallback(
+    (symbol: string, market: Market, currentPrice?: number): StockWithCalculations | null => {
+      const owned = ownedMap.get(`${market}_${symbol}`);
+      return owned ? enrichStockWithCalculations(owned, currentPrice) : null;
+    },
+    [ownedMap],
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -333,14 +369,24 @@ export default function WatchlistPage() {
 
   const loadFavorites = useCallback(async () => {
     try {
-      const [res, rateRes] = await Promise.all([
+      const [res, rateRes, stocksRes] = await Promise.all([
         fetch('/api/favorites'),
         fetch('/api/exchange-rate'),
+        fetch('/api/stocks'),
       ]);
 
       try {
         const rateData = await rateRes.json();
         setUsdRate(rateData.rate || 0);
+      } catch { /* ignore */ }
+
+      try {
+        if (stocksRes.ok) {
+          const stocksData: IStock[] = await stocksRes.json();
+          const map = new Map<string, IStock>();
+          stocksData.forEach((s) => map.set(`${s.market}_${s.symbol}`, s));
+          setOwnedMap(map);
+        }
       } catch { /* ignore */ }
 
       if (res.ok) {
@@ -460,6 +506,7 @@ export default function WatchlistPage() {
                       onRemove={removeFavorite}
                       isExpanded={expandedId === item._id}
                       onToggleExpand={() => toggleExpand(item._id)}
+                      ownedStock={getOwnedStock(item.symbol, item.market, item.price?.currentPrice)}
                     />
                   ))}
                 </SortableContext>
@@ -491,6 +538,7 @@ export default function WatchlistPage() {
                             onRemove={removeFavorite}
                             isExpanded={expandedId === item._id}
                             onToggleExpand={() => toggleExpand(item._id)}
+                            ownedStock={getOwnedStock(item.symbol, item.market, item.price?.currentPrice)}
                           />
                         ))}
                       </Table.Tbody>
