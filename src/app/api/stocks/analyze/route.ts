@@ -190,30 +190,42 @@ export async function POST(request: NextRequest) {
     // 2. 計算技術指標
     const indicators = calculateIndicators(candles);
 
-    // 3. 呼叫 Google Gemini
+    // 3. 呼叫 Google Gemini（依序嘗試模型，避免單一模型額度用完）
     const prompt = buildPrompt(symbol, name || symbol, market as Market, indicators);
-
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const modelNames = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+    let lastError: unknown = null;
 
-    const result = await model.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [{ text: `你是一位專業的台灣股票技術分析師，擅長使用多種技術指標和投資策略進行分析。請用繁體中文回答。\n\n${prompt}` }],
-      }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 2000,
-      },
-    });
+    for (const modelName of modelNames) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent({
+          contents: [{
+            role: 'user',
+            parts: [{ text: `你是一位專業的台灣股票技術分析師，擅長使用多種技術指標和投資策略進行分析。請用繁體中文回答。\n\n${prompt}` }],
+          }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 2000,
+          },
+        });
 
-    const analysis = result.response.text() || '分析失敗';
+        const analysis = result.response.text() || '分析失敗';
+        return NextResponse.json({
+          analysis,
+          indicators,
+          analyzedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error(`Model ${modelName} failed:`, err);
+        lastError = err;
+        // 繼續嘗試下一個模型
+      }
+    }
 
-    return NextResponse.json({
-      analysis,
-      indicators,
-      analyzedAt: new Date().toISOString(),
-    });
+    // 所有模型都失敗
+    const message = lastError instanceof Error ? lastError.message : '所有模型額度已用完，請稍後再試';
+    return NextResponse.json({ error: message }, { status: 429 });
   } catch (error) {
     console.error('Stock analysis error:', error);
     const message = error instanceof Error ? error.message : '分析失敗';
