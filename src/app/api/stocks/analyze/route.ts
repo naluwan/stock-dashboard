@@ -3,6 +3,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { calculateIndicators, OHLCV } from '@/lib/technical-indicators';
 import { Market } from '@/types';
 
+// 強制 Vercel function 跑在美國，避免亞洲節點被 Gemini 地區封鎖
+export const preferredRegion = 'iad1';
+
 async function fetchHistoricalData(symbol: string, market: Market): Promise<OHLCV[]> {
   const yahooSymbol = market === 'TW' ? `${symbol}.TW` : symbol;
   // 抓 6 個月的日 K 線（確保 120 日均線有足夠資料）
