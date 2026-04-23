@@ -209,8 +209,9 @@ export async function POST(request: NextRequest) {
 
     if (!geminiRes.ok) {
       const errData = await geminiRes.json().catch(() => ({}));
-      console.error('Gemini API error:', JSON.stringify(errData));
-      const errMsg = errData?.error?.message || `Gemini API 錯誤 (${geminiRes.status})`;
+      const keyPrefix = apiKey.substring(0, 10);
+      console.error('Gemini API error:', JSON.stringify(errData), 'key prefix:', keyPrefix);
+      const errMsg = `${errData?.error?.message || `Gemini API 錯誤 (${geminiRes.status})`} [key: ${keyPrefix}...]`;
       return NextResponse.json({ error: errMsg }, { status: geminiRes.status });
     }
 
