@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
     const prompt = buildPrompt(symbol, name || symbol, market as Market, indicators);
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const result = await model.generateContent({
       contents: [{
