@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Card, Center, Group, Loader, SimpleGrid, Stack, Text } from '@mantine/core';
-import { DollarSign } from 'lucide-react';
+import { Box, Button, Card, Center, Group, Loader, SimpleGrid, Stack, Text } from '@mantine/core';
+import { BrainCircuit, DollarSign } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import PortfolioSummary from '@/components/dashboard/PortfolioSummary';
 import StockCard from '@/components/dashboard/StockCard';
 import AlertStatusPanel from '@/components/dashboard/AlertStatusPanel';
 import PriceChart from '@/components/dashboard/PriceChart';
 import YearlyPLReport from '@/components/dashboard/YearlyPLReport';
+import PortfolioAnalysisDrawer from '@/components/dashboard/PortfolioAnalysisDrawer';
 import { StockWithCalculations, IAlert, IStock } from '@/types';
 import { enrichStockWithCalculations } from '@/lib/utils';
 
@@ -18,6 +19,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [usdRate, setUsdRate] = useState(0);
   const [privacyMode, setPrivacyMode] = useState(true);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -77,9 +79,33 @@ export default function DashboardPage() {
     );
   }
 
+  const hasHoldings = stocks.some((s) => s.totalShares > 0);
+
   return (
     <div>
-      <Header title="投資組合總覽" subtitle="即時監控你的股票投資" onRefresh={fetchData} />
+      <Header
+        title="投資組合總覽"
+        subtitle="即時監控你的股票投資"
+        onRefresh={fetchData}
+        rightSection={
+          hasHoldings && (
+            <Button
+              color="indigo"
+              variant="light"
+              size="sm"
+              leftSection={<BrainCircuit size={16} />}
+              onClick={() => setAnalysisOpen(true)}
+            >
+              AI 分析
+            </Button>
+          )
+        }
+      />
+
+      <PortfolioAnalysisDrawer
+        opened={analysisOpen}
+        onClose={() => setAnalysisOpen(false)}
+      />
 
       <Stack gap="lg" p={{ base: 'md', sm: 'xl' }}>
         {usdRate > 0 && (

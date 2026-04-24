@@ -8,9 +8,10 @@ interface HeaderProps {
   title: string;
   subtitle?: string;
   onRefresh?: () => void;
+  rightSection?: React.ReactNode;
 }
 
-export default function Header({ title, subtitle, onRefresh }: HeaderProps) {
+export default function Header({ title, subtitle, onRefresh, rightSection }: HeaderProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
@@ -43,18 +44,20 @@ export default function Header({ title, subtitle, onRefresh }: HeaderProps) {
           </Text>
         )}
       </Stack>
-      {onRefresh && (
-        <Button
-          onClick={handleRefresh}
-          loading={isRefreshing}
-          leftSection={<RefreshCw size={16} />}
-          size="sm"
-          color="teal"
-          style={{ flexShrink: 0 }}
-        >
-          重新整理
-        </Button>
-      )}
+      <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
+        {rightSection}
+        {onRefresh && (
+          <Button
+            onClick={handleRefresh}
+            loading={isRefreshing}
+            leftSection={<RefreshCw size={16} />}
+            size="sm"
+            color="teal"
+          >
+            重新整理
+          </Button>
+        )}
+      </Group>
     </Group>
   );
 }
