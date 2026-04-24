@@ -3,8 +3,8 @@ import connectDB from '@/lib/mongodb';
 import Stock from '@/models/Stock';
 import PortfolioAnalysis from '@/models/PortfolioAnalysis';
 import { calculateIndicators, OHLCV } from '@/lib/technical-indicators';
-import { enrichStockWithCalculations } from '@/lib/utils';
-import { IStock, Market } from '@/types';
+import { enrichStockWithCalculations, calculateRealizedPL } from '@/lib/utils';
+import { IStock, Market, Sale } from '@/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -52,16 +52,25 @@ async function fetchHistory(symbol: string, market: Market): Promise<OHLCV[]> {
   return candles || [];
 }
 
-interface HoldingWithIndicators {
+interface SaleSummary {
+  date: string;
+  shares: number;
+  price: number;
+  avgCostAtSale: number;
+  pl: number;
+}
+
+interface StockAnalysis {
+  status: 'held' | 'closed'; // held: 目前持有；closed: 已完全賣光
   symbol: string;
   name: string;
   market: Market;
-  shares: number;
+  shares: number; // held: 持股數；closed: 0
   averagePrice: number;
-  currentPrice?: number;
-  totalCost: number;
+  currentPrice?: number; // 現在的市價（即使已清倉也抓）
+  totalCost: number; // held: 持有部位的成本；closed: 0
   totalValue?: number;
-  totalProfit?: number;
+  totalProfit?: number; // 未實現
   totalProfitPercent?: number;
   purchaseCount: number;
   firstPurchaseDate?: string;
@@ -73,37 +82,89 @@ interface HoldingWithIndicators {
   priceVsSma20?: number;
   priceVsSma60?: number;
   volatility?: number;
+  saleCount: number;
+  realizedPL: number; // 已實現
+  totalSharesSold?: number;
+  firstSaleDate?: string;
+  lastSaleDate?: string;
+  recentSales: SaleSummary[];
+}
+
+function renderStockSection(s: StockAnalysis, i: number): string {
+  const currency = s.market === 'TW' ? 'NT$' : 'US$';
+  const marketLabel = s.market === 'TW' ? '台股' : '美股';
+
+  const salesLine =
+    s.saleCount > 0
+      ? `- 賣出紀錄：${s.saleCount} 次（${s.firstSaleDate} ~ ${s.lastSaleDate}），累計已實現損益 ${currency} ${s.realizedPL.toFixed(0)}`
+      : '- 賣出紀錄：無';
+
+  const recentSalesLine =
+    s.recentSales.length > 0
+      ? '- 最近賣出（最多 5 筆）：\n' +
+        s.recentSales
+          .map(
+            (x) =>
+              `  · ${x.date} 賣 ${x.shares} 股 @ ${currency} ${x.price.toFixed(2)}（當下成本 ${currency} ${x.avgCostAtSale.toFixed(2)}，單筆損益 ${currency} ${x.pl.toFixed(0)}）`,
+          )
+          .join('\n')
+      : '';
+
+  if (s.status === 'held') {
+    const plSign = (s.totalProfit || 0) >= 0 ? '獲利' : '虧損';
+    return `
+### ${i + 1}. ${s.symbol} ${s.name}（${marketLabel}）· 目前持有
+- 持有股數：${s.shares} 股，平均成本 ${currency} ${s.averagePrice.toFixed(2)}，現價 ${currency} ${s.currentPrice?.toFixed(2) ?? '-'}
+- 持倉成本 ${currency} ${s.totalCost.toFixed(0)}，市值 ${currency} ${s.totalValue?.toFixed(0) ?? '-'}
+- 未實現 ${plSign} ${currency} ${Math.abs(s.totalProfit || 0).toFixed(0)}（${s.totalProfitPercent?.toFixed(2)}%）
+- 買入次數：${s.purchaseCount} 次（${s.firstPurchaseDate} ~ ${s.latestPurchaseDate}）
+- 近 90 天：漲跌 ${s.return90d?.toFixed(2)}%，最高 ${currency} ${s.high90d?.toFixed(2)}，最低 ${currency} ${s.low90d?.toFixed(2)}，波動度 ${s.volatility?.toFixed(2)}%
+- 技術面：RSI(14) ${s.rsi?.toFixed(1)}，離 20 日均 ${s.priceVsSma20?.toFixed(2)}%，離 60 日均 ${s.priceVsSma60?.toFixed(2)}%
+${salesLine}
+${recentSalesLine}
+`.trim();
+  }
+
+  // closed
+  return `
+### ${i + 1}. ${s.symbol} ${s.name}（${marketLabel}）· 已清倉
+- 買入次數：${s.purchaseCount} 次（${s.firstPurchaseDate} ~ ${s.latestPurchaseDate}），總買進 ${s.shares === 0 ? s.totalSharesSold : '-'} 股
+- 已完全賣光，現價（參考）${currency} ${s.currentPrice?.toFixed(2) ?? '-'}
+- 近 90 天（自大盤角度）：漲跌 ${s.return90d?.toFixed(2)}%，最高 ${currency} ${s.high90d?.toFixed(2)}，最低 ${currency} ${s.low90d?.toFixed(2)}，波動度 ${s.volatility?.toFixed(2)}%
+- 技術面（參考）：RSI(14) ${s.rsi?.toFixed(1)}，離 20 日均 ${s.priceVsSma20?.toFixed(2)}%
+${salesLine}
+${recentSalesLine}
+`.trim();
 }
 
 function buildPrompt(
-  holdings: HoldingWithIndicators[],
+  held: StockAnalysis[],
+  closed: StockAnalysis[],
   totals: {
     totalCostTWD: number;
     totalValueTWD: number;
-    totalPLTWD: number;
-    totalPLPercent: number;
+    totalUnrealizedPLTWD: number;
+    totalUnrealizedPLPercent: number;
+    totalRealizedPLTWD: number;
+    totalCombinedPLTWD: number;
     usdRate: number;
   },
   previousAnalysis?: { date: string; title: string; snippet: string },
 ): string {
-  const holdingsText = holdings
-    .map((h, i) => {
-      const currency = h.market === 'TW' ? 'NT$' : 'US$';
-      const plSign = (h.totalProfit || 0) >= 0 ? '獲利' : '虧損';
-      return `
-### ${i + 1}. ${h.symbol} ${h.name}（${h.market === 'TW' ? '台股' : '美股'}）
-- 持有股數：${h.shares} 股，平均成本 ${currency} ${h.averagePrice.toFixed(2)}，現價 ${currency} ${h.currentPrice?.toFixed(2) ?? '-'}
-- 成本 ${currency} ${h.totalCost.toFixed(0)}，市值 ${currency} ${h.totalValue?.toFixed(0) ?? '-'}
-- ${plSign} ${currency} ${Math.abs(h.totalProfit || 0).toFixed(0)}（${h.totalProfitPercent?.toFixed(2)}%）
-- 買入次數：${h.purchaseCount} 次（${h.firstPurchaseDate} ~ ${h.latestPurchaseDate}）
-- 近 90 天：漲跌 ${h.return90d?.toFixed(2)}%，最高 ${currency} ${h.high90d?.toFixed(2)}，最低 ${currency} ${h.low90d?.toFixed(2)}，波動度 ${h.volatility?.toFixed(2)}%
-- 技術面：RSI(14) ${h.rsi?.toFixed(1)}，離 20 日均 ${h.priceVsSma20?.toFixed(2)}%，離 60 日均 ${h.priceVsSma60?.toFixed(2)}%
-`.trim();
-    })
-    .join('\n\n');
+  const heldText = held.length > 0
+    ? held.map((s, i) => renderStockSection(s, i)).join('\n\n')
+    : '（目前沒有任何持股）';
+
+  const closedText = closed.length > 0
+    ? closed.map((s, i) => renderStockSection(s, i)).join('\n\n')
+    : '';
 
   const previousSection = previousAnalysis
     ? `\n## 上次分析（${previousAnalysis.date}）重點\n「${previousAnalysis.title}」\n${previousAnalysis.snippet}\n請在本次分析中適當對照上次建議，指出使用者有無照做、組合有何變化。\n`
+    : '';
+
+  const closedSection = closed.length > 0
+    ? `\n## 最近 90 天內已清倉的股票（參考交易行為，非目前持股）\n${closedText}\n`
     : '';
 
   return `你是一位像朋友一樣說話的投資組合顧問。使用者是一般散戶，請用白話、不要用術語（RSI、MACD、KD、β、Sharpe 這些都不要出現）。請用繁體中文回答。
@@ -118,43 +179,52 @@ function buildPrompt(
 - 描述近期表現（波動、相對大盤）
 - 每個「需要調整」配 2~3 個具體做法 (A)(B)(C) 讓使用者選擇
 - 指出成本結構問題（買太高、攤平太多次等）
+- 評論使用者的交易習慣（是否常在虧損時砍、獲利太早跑、進出頻繁等）
+- 對比已清倉部位的賣出價和現在價，點出賣得太早 / 太晚的模式
 
 ## 使用者的資產快照（統一換算台幣）
-- 總成本：NT$ ${totals.totalCostTWD.toFixed(0)}
-- 總市值：NT$ ${totals.totalValueTWD.toFixed(0)}
-- 總損益：NT$ ${totals.totalPLTWD.toFixed(0)}（${totals.totalPLPercent.toFixed(2)}%）
+- 目前持股總成本：NT$ ${totals.totalCostTWD.toFixed(0)}
+- 目前持股總市值：NT$ ${totals.totalValueTWD.toFixed(0)}
+- **未實現損益**：NT$ ${totals.totalUnrealizedPLTWD.toFixed(0)}（${totals.totalUnrealizedPLPercent.toFixed(2)}%）
+- **已實現損益（含所有賣出紀錄）**：NT$ ${totals.totalRealizedPLTWD.toFixed(0)}
+- **合計損益（實現 + 未實現）**：NT$ ${totals.totalCombinedPLTWD.toFixed(0)}
 - 匯率：USD/TWD = ${totals.usdRate.toFixed(2)}
 ${previousSection}
-## 各檔持股細節
-${holdingsText}
+## 目前持股細節
+${heldText}
+${closedSection}
 
 ---
 
 ## 📋 請嚴格依以下格式回答（繁體中文 markdown）
 
-# [標題：10 字以內，概括這次組合最關鍵的發現，例如「半導體持倉偏高」]
+# [標題：10 字以內，概括這次組合最關鍵的發現]
 
 ## 🎯 組合總評
-2-3 段，像朋友聊天那樣講使用者目前整個組合的狀況。把總損益、集中度、整體風險程度講清楚。
+2-3 段，像朋友聊天那樣講使用者目前整個組合的狀況。**把未實現、已實現、合計損益都提一下**，講集中度、整體風險程度。
 
 ## 📊 分散度分析
-- **產業集中度**：用白話說哪個產業占比過高，有什麼風險
+- **產業集中度**：哪個產業占比過高，有什麼風險
 - **市場配置**：台股 vs 美股比例，幣別風險
-- **個股集中度**：如果單一檔占比 > 40% 要明確提出
+- **個股集中度**：單一檔占比 > 40% 要明確提出
 
 如果需要調整，給 2~3 個具體方案（分批減倉 / 新資金優先買其他產業等），每個方案寫清楚怎麼做。
 
 ## 🔍 個股逐檔快評
-每檔股票用一段話（3~5 句）講：
-- 目前成本 vs 現價的狀況
-- 近期表現（漲多/跌多/整理）
-- 是否有明顯的觀察點（大幅虧損、買太多次、離均價太遠等）
-- 如果有建議，給 2~3 個選項讓使用者選
+每檔**目前持股**用一段話（3~5 句）講：
+- 目前成本 vs 現價
+- 近期表現
+- 有無明顯觀察點
+- 2~3 個選項讓使用者選
+${closed.length > 0 ? '\n**已清倉的股票**另起一段，評論交易結果：賺賠如何、賣得太早或太晚（對比目前價）、有無明顯的好壞習慣。\n' : ''}
 
 ## 📈 近 90 天組合復盤
-描述這段時間組合整體發生什麼、最亮眼和最糟糕的是哪一檔、波動是否合理。
+描述這段時間整體發生什麼、最亮眼 / 最糟糕的是哪一檔、已實現和未實現的表現差距。
 
-${previousAnalysis ? '## 🔄 跟上次相比\n對照上次分析的建議，指出使用者做了什麼、組合如何變化、哪些建議還沒處理。\n\n' : ''}## ⚠️ 提醒
+## 🧠 交易習慣觀察
+根據所有買賣紀錄，指出 1~2 個你觀察到的習慣（例如「虧損時太快砍」「買太高又攤平」「賺一點就跑」等），用朋友口吻給 2~3 個調整建議。
+
+${previousAnalysis ? '## 🔄 跟上次相比\n對照上次分析，指出使用者做了什麼、組合如何變化、哪些建議還沒處理。\n\n' : ''}## ⚠️ 提醒
 2~3 句重要的風險提醒。
 
 ---
@@ -190,16 +260,31 @@ export async function POST(request: NextRequest) {
       }
     } catch { /* ignore */ }
 
-    // 3. 對每檔抓 6 個月歷史 + 算指標（限前 20 檔避免超時）
-    const stocksToAnalyze = stocksRaw.slice(0, 20);
-    const holdingsPromises = stocksToAnalyze.map(async (stock) => {
+    // 3. 篩選要分析的股票：有持股 OR 最近 90 天內有賣出紀錄
+    const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - NINETY_DAYS_MS;
+
+    const stocksToAnalyze = stocksRaw
+      .filter((stock) => {
+        const totalShares = (stock.purchases || []).reduce((s, p) => s + p.shares, 0) -
+          (stock.sales || []).reduce((s, x) => s + x.shares, 0);
+        if (totalShares > 0) return true;
+        // 已清倉 → 需最近 90 天內有賣出
+        const sales = stock.sales || [];
+        const lastSale = sales.reduce(
+          (acc, s) => Math.max(acc, new Date(s.date).getTime()),
+          0,
+        );
+        return lastSale >= cutoff;
+      })
+      .slice(0, 20);
+
+    const stockPromises = stocksToAnalyze.map(async (stock): Promise<StockAnalysis | null> => {
       const candles = await fetchHistory(stock.symbol, stock.market);
       if (candles.length < 20) return null;
 
       const currentPrice = candles[candles.length - 1].close;
       const enriched = enrichStockWithCalculations(stock, currentPrice);
-      if (enriched.totalShares <= 0) return null;
-
       const indicators = calculateIndicators(candles);
 
       // 90 天視窗
@@ -225,7 +310,38 @@ export async function POST(request: NextRequest) {
         ? new Date(sortedPurchases[sortedPurchases.length - 1].date).toISOString().split('T')[0]
         : undefined;
 
-      const result: HoldingWithIndicators = {
+      const sales = (stock.sales || []) as Sale[];
+      const sortedSales = [...sales].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+      );
+      const firstSaleDate = sortedSales[0]?.date
+        ? new Date(sortedSales[0].date).toISOString().split('T')[0]
+        : undefined;
+      const lastSaleDate = sortedSales[sortedSales.length - 1]?.date
+        ? new Date(sortedSales[sortedSales.length - 1].date).toISOString().split('T')[0]
+        : undefined;
+      const totalSharesSold = sales.reduce((s, x) => s + x.shares, 0);
+
+      // 最近 5 筆賣出（倒序）
+      const recentSales: SaleSummary[] = [...sortedSales]
+        .reverse()
+        .slice(0, 5)
+        .map((s) => {
+          const sellProceeds = s.price * s.shares - (s.commission || 0) - (s.tax || 0);
+          const buyCost = s.avgCostAtSale * s.shares;
+          return {
+            date: new Date(s.date).toISOString().split('T')[0],
+            shares: s.shares,
+            price: s.price,
+            avgCostAtSale: s.avgCostAtSale,
+            pl: sellProceeds - buyCost,
+          };
+        });
+
+      const status: 'held' | 'closed' = enriched.totalShares > 0 ? 'held' : 'closed';
+
+      const result: StockAnalysis = {
+        status,
         symbol: stock.symbol,
         name: stock.name,
         market: stock.market,
@@ -246,28 +362,41 @@ export async function POST(request: NextRequest) {
         priceVsSma20: indicators.priceVsSma20,
         priceVsSma60: indicators.priceVsSma60,
         volatility,
+        saleCount: sales.length,
+        realizedPL: calculateRealizedPL(sales),
+        totalSharesSold,
+        firstSaleDate,
+        lastSaleDate,
+        recentSales,
       };
       return result;
     });
 
-    const holdingsResults = await Promise.all(holdingsPromises);
-    const holdings = holdingsResults.filter((h): h is HoldingWithIndicators => h !== null);
+    const stockResults = await Promise.all(stockPromises);
+    const allStocks = stockResults.filter((s): s is StockAnalysis => s !== null);
+    const held = allStocks.filter((s) => s.status === 'held');
+    const closed = allStocks.filter((s) => s.status === 'closed');
 
-    if (holdings.length === 0) {
+    if (allStocks.length === 0) {
       return NextResponse.json(
-        { error: '目前沒有持股（或歷史資料不足），無法分析' },
+        { error: '沒有可分析的股票（歷史資料不足 or 無持股無近期賣出）' },
         { status: 400 },
       );
     }
 
-    // 4. 計算組合 totals（統一台幣）
+    // 4. 計算組合 totals（統一台幣，含實現 + 未實現）
     const toTWD = (amount: number, market: Market) =>
       market === 'US' && usdRate > 0 ? amount * usdRate : amount;
 
-    const totalCostTWD = holdings.reduce((sum, h) => sum + toTWD(h.totalCost, h.market), 0);
-    const totalValueTWD = holdings.reduce((sum, h) => sum + toTWD(h.totalValue || 0, h.market), 0);
-    const totalPLTWD = totalValueTWD - totalCostTWD;
-    const totalPLPercent = totalCostTWD > 0 ? (totalPLTWD / totalCostTWD) * 100 : 0;
+    const totalCostTWD = held.reduce((sum, h) => sum + toTWD(h.totalCost, h.market), 0);
+    const totalValueTWD = held.reduce((sum, h) => sum + toTWD(h.totalValue || 0, h.market), 0);
+    const totalUnrealizedPLTWD = totalValueTWD - totalCostTWD;
+    const totalUnrealizedPLPercent = totalCostTWD > 0 ? (totalUnrealizedPLTWD / totalCostTWD) * 100 : 0;
+    const totalRealizedPLTWD = allStocks.reduce(
+      (sum, s) => sum + toTWD(s.realizedPL, s.market),
+      0,
+    );
+    const totalCombinedPLTWD = totalUnrealizedPLTWD + totalRealizedPLTWD;
 
     // 5. 撈上一次分析（>= 3 天前）當作 context
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
@@ -284,8 +413,17 @@ export async function POST(request: NextRequest) {
 
     // 6. 組 prompt + 呼叫 OpenAI
     const prompt = buildPrompt(
-      holdings,
-      { totalCostTWD, totalValueTWD, totalPLTWD, totalPLPercent, usdRate },
+      held,
+      closed,
+      {
+        totalCostTWD,
+        totalValueTWD,
+        totalUnrealizedPLTWD,
+        totalUnrealizedPLPercent,
+        totalRealizedPLTWD,
+        totalCombinedPLTWD,
+        usdRate,
+      },
       previousAnalysis,
     );
 
@@ -316,9 +454,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'AI 回應為空' }, { status: 500 });
     }
 
-    // 7. 存 DB
+    // 7. 存 DB（snapshot 只記錄目前持股，已清倉不存 snapshot）
     const title = extractTitle(analysis);
-    const snapshot = holdings.map((h) => ({
+    const snapshot = held.map((h) => ({
       symbol: h.symbol,
       name: h.name,
       market: h.market,
