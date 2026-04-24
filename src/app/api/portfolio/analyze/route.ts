@@ -7,7 +7,6 @@ import { enrichStockWithCalculations } from '@/lib/utils';
 import { IStock, Market } from '@/types';
 
 export const runtime = 'nodejs';
-export const preferredRegion = 'iad1';
 export const maxDuration = 60;
 
 async function fetchHistory(symbol: string, market: Market): Promise<OHLCV[]> {
@@ -168,7 +167,7 @@ function extractTitle(markdown: string): string {
   return '組合分析';
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -290,36 +289,28 @@ export async function POST() {
       previousAnalysis,
     );
 
-    const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    // 內部 fetch Edge 代理（Node.js IP 會被 OpenAI 擋，必須走 Edge）
+    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const host = request.headers.get('host') || 'localhost:3000';
+    const baseUrl = host.startsWith('localhost') ? `http://${host}` : `${protocol}://${host}`;
+
+    const openaiRes = await fetch(`${baseUrl}/api/portfolio/openai`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content:
-              '你是一位說白話的台灣投資組合顧問，像朋友聊天那樣給建議。嚴禁預測股價漲跌、嚴禁給具體買賣指令，只能給風險分析與多選項建議。請用繁體中文、Markdown 回答。',
-          },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.4,
-        max_tokens: 3000,
+        prompt,
+        systemMessage:
+          '你是一位說白話的台灣投資組合顧問，像朋友聊天那樣給建議。嚴禁預測股價漲跌、嚴禁給具體買賣指令，只能給風險分析與多選項建議。請用繁體中文、Markdown 回答。',
       }),
     });
 
     if (!openaiRes.ok) {
       const errData = await openaiRes.json().catch(() => ({}));
-      console.error('OpenAI API error:', JSON.stringify(errData));
-      const errMsg = errData?.error?.message || `OpenAI API 錯誤 (${openaiRes.status})`;
+      const errMsg = errData?.error || `OpenAI 代理錯誤 (${openaiRes.status})`;
       return NextResponse.json({ error: errMsg }, { status: openaiRes.status });
     }
 
-    const openaiData = await openaiRes.json();
-    const analysis = openaiData?.choices?.[0]?.message?.content || '';
+    const { analysis } = await openaiRes.json();
 
     if (!analysis) {
       return NextResponse.json({ error: 'AI 回應為空' }, { status: 500 });
