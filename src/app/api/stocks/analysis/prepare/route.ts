@@ -1,61 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
+import connectDB from '@/lib/mongodb';
+import StockAnalysisRecord from '@/models/StockAnalysisRecord';
 import { calculateIndicators, OHLCV } from '@/lib/technical-indicators';
 import { Market } from '@/types';
 
-export const runtime = 'edge';
-export const preferredRegion = 'iad1';
-
+export const runtime = 'nodejs';
 
 async function fetchHistoricalData(symbol: string, market: Market): Promise<OHLCV[]> {
   const yahooSymbol = market === 'TW' ? `${symbol}.TW` : symbol;
-  // 抓 6 個月的日 K 線（確保 120 日均線有足夠資料）
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=6mo`;
 
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    cache: 'no-store',
-  });
-
-  if (!res.ok) {
-    // 台股可能是上櫃 (.TWO)
-    if (market === 'TW') {
-      const twoUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}.TWO?interval=1d&range=6mo`;
-      const twoRes = await fetch(twoUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        cache: 'no-store',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parse = (data: any): OHLCV[] => {
+    const result = data?.chart?.result?.[0];
+    if (!result) return [];
+    const timestamps: number[] = result.timestamp || [];
+    const quote = result.indicators?.quote?.[0];
+    if (!quote) return [];
+    const candles: OHLCV[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      if (quote.close[i] === null) continue;
+      candles.push({
+        date: new Date(timestamps[i] * 1000).toISOString().split('T')[0],
+        open: quote.open[i] || 0,
+        high: quote.high[i] || 0,
+        low: quote.low[i] || 0,
+        close: quote.close[i] || 0,
+        volume: quote.volume[i] || 0,
       });
-      if (!twoRes.ok) throw new Error('無法取得歷史價格');
-      return parseChartData(await twoRes.json());
     }
-    throw new Error('無法取得歷史價格');
+    return candles;
+  };
+
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' });
+  if (res.ok) {
+    const candles = parse(await res.json());
+    if (candles.length > 0) return candles;
   }
 
-  return parseChartData(await res.json());
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseChartData(data: any): OHLCV[] {
-  const result = data?.chart?.result?.[0];
-  if (!result) throw new Error('Yahoo Finance 回傳格式錯誤');
-
-  const timestamps: number[] = result.timestamp || [];
-  const quote = result.indicators?.quote?.[0];
-  if (!quote) throw new Error('無 K 線資料');
-
-  const candles: OHLCV[] = [];
-  for (let i = 0; i < timestamps.length; i++) {
-    if (quote.close[i] === null) continue;
-    candles.push({
-      date: new Date(timestamps[i] * 1000).toISOString().split('T')[0],
-      open: quote.open[i] || 0,
-      high: quote.high[i] || 0,
-      low: quote.low[i] || 0,
-      close: quote.close[i] || 0,
-      volume: quote.volume[i] || 0,
-    });
+  if (market === 'TW') {
+    const twoUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}.TWO?interval=1d&range=6mo`;
+    const twoRes = await fetch(twoUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, cache: 'no-store' });
+    if (twoRes.ok) return parse(await twoRes.json());
   }
-
-  return candles;
+  return [];
 }
 
 interface PositionInfo {
@@ -71,7 +59,8 @@ function buildPrompt(
   name: string,
   market: Market,
   indicators: ReturnType<typeof calculateIndicators>,
-  position?: PositionInfo
+  position: PositionInfo | undefined,
+  previousAnalysis: { date: string; snippet: string } | undefined,
 ): string {
   const { macd, kd, bollinger } = indicators;
   const currency = market === 'TW' ? 'NT$' : 'US$';
@@ -90,6 +79,10 @@ function buildPrompt(
 - 尚未持有此股票
 `;
 
+  const previousSection = previousAnalysis
+    ? `\n## 上次分析（${previousAnalysis.date}）摘要\n${previousAnalysis.snippet}\n\n請在本次分析中**對照上次的看法**，指出哪些觀點仍然成立、哪些已經改變、目前該股票相較上次有什麼變化。\n`
+    : '';
+
   return `你是一位說話直白的股票分析師朋友。我是一般散戶，不懂太多專業術語。請根據技術指標幫我分析這檔股票，用聊天的口氣告訴我該怎麼做。
 
 ## 股票資訊
@@ -97,7 +90,7 @@ function buildPrompt(
 - 市場：${market === 'TW' ? '台股' : '美股'}
 - 目前價格：${currency} ${indicators.currentPrice}
 - 今日漲跌：${indicators.change}（${indicators.changePercent}%）
-${positionSection}
+${positionSection}${previousSection}
 ## 技術指標數據
 
 均線：5日=${indicators.sma5}, 10日=${indicators.sma10}, 20日=${indicators.sma20}, 60日=${indicators.sma60}, 120日=${indicators.sma120}
@@ -150,7 +143,7 @@ ${position?.totalShares && position.totalShares > 0
 - **目標獲利價位：** ${currency} ___（漲到這裡可以考慮賣）
 - **停損價位：** ${currency} ___（跌破這裡就該跑了）
 
-### ⚠️ 要注意的事
+${previousAnalysis ? '### 🔄 跟上次相比\n對照上次分析，指出股價、技術面、整體看法的主要變化（2~3 句話）。\n\n' : ''}### ⚠️ 要注意的事
 用 2-3 句話提醒我最重要的風險或機會，像朋友聊天一樣說。
 
 ---
@@ -159,64 +152,66 @@ ${position?.totalShares && position.totalShares > 0
 
 export async function POST(request: NextRequest) {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: '未設定 OPENAI_API_KEY' }, { status: 500 });
-    }
+    const body = await request.json();
+    const { symbol, name, market, averagePrice, totalShares, totalProfit, totalProfitPercent, currentPrice } = body;
 
-    const { symbol, name, market, averagePrice, totalShares, totalProfit, totalProfitPercent, currentPrice } = await request.json();
     if (!symbol || !market) {
       return NextResponse.json({ error: '缺少 symbol 或 market' }, { status: 400 });
     }
 
-    // 1. 抓歷史資料
+    // 1. 抓歷史資料 + 算指標
     const candles = await fetchHistoricalData(symbol, market as Market);
     if (candles.length < 30) {
       return NextResponse.json({ error: '歷史資料不足，無法分析' }, { status: 400 });
     }
-
-    // 2. 計算技術指標
     const indicators = calculateIndicators(candles);
-    const prompt = buildPrompt(symbol, name || symbol, market as Market, indicators, {
-      averagePrice, totalShares, totalProfit, totalProfitPercent, currentPrice,
-    });
 
-    // 3. 呼叫 OpenAI（直接用 fetch）
-    const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: '你是一位說話直白的台灣股票分析師，像朋友聊天一樣給建議。不要用專業術語，要用一般人聽得懂的話。請用繁體中文回答。' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.3,
-        max_tokens: 8000,
-      }),
-    });
+    // 2. 撈上次分析（>= 3 天前）
+    await connectDB();
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const previousDoc = await StockAnalysisRecord.findOne({
+      symbol: symbol.toUpperCase(),
+      market,
+      createdAt: { $lte: threeDaysAgo },
+    })
+      .sort({ createdAt: -1 })
+      .lean<{ analysis: string; createdAt: Date } | null>();
 
-    if (!openaiRes.ok) {
-      const errData = await openaiRes.json().catch(() => ({}));
-      console.error('OpenAI API error:', JSON.stringify(errData));
-      const errMsg = errData?.error?.message || `OpenAI API 錯誤 (${openaiRes.status})`;
-      return NextResponse.json({ error: errMsg }, { status: openaiRes.status });
-    }
+    const previousAnalysis = previousDoc
+      ? {
+          date: new Date(previousDoc.createdAt).toISOString().split('T')[0],
+          // 取結論段，避免太長
+          snippet: previousDoc.analysis.slice(0, 800),
+        }
+      : undefined;
 
-    const openaiData = await openaiRes.json();
-    const analysis = openaiData?.choices?.[0]?.message?.content || '分析失敗';
-
-    return NextResponse.json({
-      analysis,
+    // 3. 組 prompt
+    const prompt = buildPrompt(
+      symbol,
+      name || symbol,
+      market as Market,
       indicators,
-      analyzedAt: new Date().toISOString(),
-    });
+      { averagePrice, totalShares, totalProfit, totalProfitPercent, currentPrice },
+      previousAnalysis,
+    );
+
+    // 4. 回傳 prompt + 快照（snapshot 用於存 DB 時記錄當下狀態）
+    const snapshot = {
+      currentPrice: indicators.currentPrice,
+      averagePrice,
+      totalShares,
+      totalProfit,
+      totalProfitPercent,
+      rsi: indicators.rsi14,
+      return5d: indicators.return5d,
+      return20d: indicators.return20d,
+      return60d: indicators.return60d,
+    };
+
+    return NextResponse.json({ prompt, snapshot, indicators });
   } catch (error) {
-    console.error('Stock analysis error:', error);
-    const message = error instanceof Error ? error.message : '分析失敗';
+    console.error('Stock analysis prepare error:', error);
+    const message = error instanceof Error ? error.message : '準備失敗';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
