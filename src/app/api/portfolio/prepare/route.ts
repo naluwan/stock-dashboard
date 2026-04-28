@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Stock from '@/models/Stock';
 import PortfolioAnalysis from '@/models/PortfolioAnalysis';
@@ -7,7 +7,6 @@ import { enrichStockWithCalculations, calculateRealizedPL } from '@/lib/utils';
 import { IStock, Market, Sale } from '@/types';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
 
 async function fetchHistory(symbol: string, market: Market): Promise<OHLCV[]> {
   const yahooSymbol = market === 'TW' ? `${symbol}.TW` : symbol;
@@ -61,16 +60,16 @@ interface SaleSummary {
 }
 
 interface StockAnalysis {
-  status: 'held' | 'closed'; // held: 目前持有；closed: 已完全賣光
+  status: 'held' | 'closed';
   symbol: string;
   name: string;
   market: Market;
-  shares: number; // held: 持股數；closed: 0
+  shares: number;
   averagePrice: number;
-  currentPrice?: number; // 現在的市價（即使已清倉也抓）
-  totalCost: number; // held: 持有部位的成本；closed: 0
+  currentPrice?: number;
+  totalCost: number;
   totalValue?: number;
-  totalProfit?: number; // 未實現
+  totalProfit?: number;
   totalProfitPercent?: number;
   purchaseCount: number;
   firstPurchaseDate?: string;
@@ -83,7 +82,7 @@ interface StockAnalysis {
   priceVsSma60?: number;
   volatility?: number;
   saleCount: number;
-  realizedPL: number; // 已實現
+  realizedPL: number;
   totalSharesSold?: number;
   firstSaleDate?: string;
   lastSaleDate?: string;
@@ -125,7 +124,6 @@ ${recentSalesLine}
 `.trim();
   }
 
-  // closed
   return `
 ### ${i + 1}. ${s.symbol} ${s.name}（${marketLabel}）· 已清倉
 - 買入次數：${s.purchaseCount} 次（${s.firstPurchaseDate} ~ ${s.latestPurchaseDate}），總買進 ${s.shares === 0 ? s.totalSharesSold : '-'} 股
@@ -231,25 +229,12 @@ ${previousAnalysis ? '## 🔄 跟上次相比\n對照上次分析，指出使用
 ⚠️ 免責聲明：以上僅供參考，不構成投資建議。`;
 }
 
-function extractTitle(markdown: string): string {
-  const match = markdown.match(/^#\s+(.+?)$/m);
-  if (match) return match[1].trim().slice(0, 30);
-  return '組合分析';
-}
-
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: '未設定 OPENAI_API_KEY' }, { status: 500 });
-    }
-
     await connectDB();
 
-    // 1. 抓使用者持股（過濾 totalShares > 0）
     const stocksRaw = await Stock.find({}).lean<IStock[]>();
 
-    // 2. 抓匯率
     let usdRate = 0;
     try {
       const rateUrl = `https://query1.finance.yahoo.com/v8/finance/chart/TWD%3DX?interval=1d&range=1d`;
@@ -260,7 +245,6 @@ export async function POST(request: NextRequest) {
       }
     } catch { /* ignore */ }
 
-    // 3. 篩選要分析的股票：有持股 OR 最近 90 天內有賣出紀錄
     const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
     const cutoff = Date.now() - NINETY_DAYS_MS;
 
@@ -269,7 +253,6 @@ export async function POST(request: NextRequest) {
         const totalShares = (stock.purchases || []).reduce((s, p) => s + p.shares, 0) -
           (stock.sales || []).reduce((s, x) => s + x.shares, 0);
         if (totalShares > 0) return true;
-        // 已清倉 → 需最近 90 天內有賣出
         const sales = stock.sales || [];
         const lastSale = sales.reduce(
           (acc, s) => Math.max(acc, new Date(s.date).getTime()),
@@ -287,7 +270,6 @@ export async function POST(request: NextRequest) {
       const enriched = enrichStockWithCalculations(stock, currentPrice);
       const indicators = calculateIndicators(candles);
 
-      // 90 天視窗
       const last90 = candles.slice(-90);
       const high90d = Math.max(...last90.map((c) => c.high));
       const low90d = Math.min(...last90.map((c) => c.low));
@@ -322,7 +304,6 @@ export async function POST(request: NextRequest) {
         : undefined;
       const totalSharesSold = sales.reduce((s, x) => s + x.shares, 0);
 
-      // 最近 5 筆賣出（倒序）
       const recentSales: SaleSummary[] = [...sortedSales]
         .reverse()
         .slice(0, 5)
@@ -340,7 +321,7 @@ export async function POST(request: NextRequest) {
 
       const status: 'held' | 'closed' = enriched.totalShares > 0 ? 'held' : 'closed';
 
-      const result: StockAnalysis = {
+      return {
         status,
         symbol: stock.symbol,
         name: stock.name,
@@ -369,7 +350,6 @@ export async function POST(request: NextRequest) {
         lastSaleDate,
         recentSales,
       };
-      return result;
     });
 
     const stockResults = await Promise.all(stockPromises);
@@ -384,7 +364,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. 計算組合 totals（統一台幣，含實現 + 未實現）
     const toTWD = (amount: number, market: Market) =>
       market === 'US' && usdRate > 0 ? amount * usdRate : amount;
 
@@ -398,7 +377,6 @@ export async function POST(request: NextRequest) {
     );
     const totalCombinedPLTWD = totalUnrealizedPLTWD + totalRealizedPLTWD;
 
-    // 5. 撈上一次分析（>= 3 天前）當作 context
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const previousDoc = await PortfolioAnalysis.findOne({ createdAt: { $lte: threeDaysAgo } })
       .sort({ createdAt: -1 })
@@ -411,7 +389,6 @@ export async function POST(request: NextRequest) {
         }
       : undefined;
 
-    // 6. 組 prompt + 呼叫 OpenAI
     const prompt = buildPrompt(
       held,
       closed,
@@ -427,35 +404,7 @@ export async function POST(request: NextRequest) {
       previousAnalysis,
     );
 
-    // 內部 fetch Edge 代理（Node.js IP 會被 OpenAI 擋，必須走 Edge）
-    const protocol = request.headers.get('x-forwarded-proto') || 'https';
-    const host = request.headers.get('host') || 'localhost:3000';
-    const baseUrl = host.startsWith('localhost') ? `http://${host}` : `${protocol}://${host}`;
-
-    const openaiRes = await fetch(`${baseUrl}/api/portfolio/openai`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        systemMessage:
-          '你是一位說白話的台灣投資組合顧問，像朋友聊天那樣給建議。嚴禁預測股價漲跌、嚴禁給具體買賣指令，只能給風險分析與多選項建議。請用繁體中文、Markdown 回答。',
-      }),
-    });
-
-    if (!openaiRes.ok) {
-      const errData = await openaiRes.json().catch(() => ({}));
-      const errMsg = errData?.error || `OpenAI 代理錯誤 (${openaiRes.status})`;
-      return NextResponse.json({ error: errMsg }, { status: openaiRes.status });
-    }
-
-    const { analysis } = await openaiRes.json();
-
-    if (!analysis) {
-      return NextResponse.json({ error: 'AI 回應為空' }, { status: 500 });
-    }
-
-    // 7. 存 DB（snapshot 只記錄目前持股，已清倉不存 snapshot）
-    const title = extractTitle(analysis);
+    // snapshot 只記錄目前持股
     const snapshot = held.map((h) => ({
       symbol: h.symbol,
       name: h.name,
@@ -469,24 +418,10 @@ export async function POST(request: NextRequest) {
       totalProfitPercent: h.totalProfitPercent,
     }));
 
-    const saved = await PortfolioAnalysis.create({
-      title,
-      snapshot,
-      analysis,
-      usdRate,
-    });
-
-    return NextResponse.json({
-      _id: saved._id,
-      title: saved.title,
-      analysis: saved.analysis,
-      snapshot: saved.snapshot,
-      usdRate: saved.usdRate,
-      createdAt: saved.createdAt,
-    });
+    return NextResponse.json({ prompt, snapshot, usdRate });
   } catch (error) {
-    console.error('Portfolio analyze error:', error);
-    const message = error instanceof Error ? error.message : '分析失敗';
+    console.error('Portfolio prepare error:', error);
+    const message = error instanceof Error ? error.message : '準備分析資料失敗';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

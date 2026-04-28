@@ -21,6 +21,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '缺少 prompt' }, { status: 400 });
     }
 
+    const defaultSystem =
+      '你是一位說白話的台灣投資組合顧問，像朋友聊天那樣給建議。嚴禁預測股價漲跌、嚴禁給具體買賣指令，只能給風險分析與多選項建議。請用繁體中文、Markdown 回答。';
+    const finalSystem = systemMessage || defaultSystem;
+
     const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -30,9 +34,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          ...(systemMessage
-            ? [{ role: 'system' as const, content: systemMessage }]
-            : []),
+          { role: 'system' as const, content: finalSystem },
           { role: 'user' as const, content: prompt },
         ],
         temperature: 0.4,

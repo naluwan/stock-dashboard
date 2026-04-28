@@ -44,14 +44,25 @@ interface PortfolioAnalysisDrawerProps {
   onClose: () => void;
 }
 
+type AnalyzeStage = 'idle' | 'preparing' | 'thinking' | 'saving';
+
+const STAGE_LABEL: Record<AnalyzeStage, { title: string; hint: string }> = {
+  idle: { title: '', hint: '' },
+  preparing: { title: '正在讀取持股 + 抓 90 天歷史...', hint: '從 Yahoo Finance 撈各檔資料 + 算指標，約 3-7 秒' },
+  thinking: { title: 'AI 正在分析中...', hint: 'gpt-4o-mini 思考組合風險與建議，約 5-15 秒' },
+  saving: { title: '儲存分析結果...', hint: '寫入歷史紀錄' },
+};
+
 export default function PortfolioAnalysisDrawer({ opened, onClose }: PortfolioAnalysisDrawerProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [stage, setStage] = useState<AnalyzeStage>('idle');
   const [current, setCurrent] = useState<AnalysisDetail | null>(null);
   const [history, setHistory] = useState<AnalysisListItem[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedDetail, setExpandedDetail] = useState<AnalysisDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const isAnalyzing = stage !== 'idle';
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
@@ -85,28 +96,59 @@ export default function PortfolioAnalysisDrawer({ opened, onClose }: PortfolioAn
   }, [opened, loadHistory]);
 
   const runAnalyze = async () => {
-    setIsAnalyzing(true);
     setError(null);
+
     try {
-      const res = await fetch('/api/portfolio/analyze', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || '分析失敗');
+      // ① prepare: 讀 DB + 抓 Yahoo + 組 prompt
+      setStage('preparing');
+      const prepRes = await fetch('/api/portfolio/prepare', { method: 'POST' });
+      const prepData = await prepRes.json();
+      if (!prepRes.ok) {
+        setError(prepData.error || '準備分析資料失敗');
         return;
       }
+      const { prompt, snapshot, usdRate } = prepData;
+
+      // ② openai: 透過 Edge 代理呼叫 OpenAI
+      setStage('thinking');
+      const aiRes = await fetch('/api/portfolio/openai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const aiData = await aiRes.json();
+      if (!aiRes.ok) {
+        setError(aiData.error || 'AI 分析失敗');
+        return;
+      }
+      const { analysis } = aiData;
+
+      // ③ save: 寫 DB
+      setStage('saving');
+      const saveRes = await fetch('/api/portfolio/save-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ analysis, snapshot, usdRate }),
+      });
+      const saveData = await saveRes.json();
+      if (!saveRes.ok) {
+        setError(saveData.error || '儲存失敗');
+        return;
+      }
+
       setCurrent({
-        _id: data._id,
-        title: data.title,
-        analysis: data.analysis,
-        createdAt: data.createdAt,
-        usdRate: data.usdRate,
+        _id: saveData._id,
+        title: saveData.title,
+        analysis: saveData.analysis,
+        createdAt: saveData.createdAt,
+        usdRate: saveData.usdRate,
       });
       loadHistory();
       notifications.show({ message: '分析完成', color: 'teal' });
     } catch {
       setError('網路錯誤，請稍後再試');
     } finally {
-      setIsAnalyzing(false);
+      setStage('idle');
     }
   };
 
@@ -200,8 +242,8 @@ export default function PortfolioAnalysisDrawer({ opened, onClose }: PortfolioAn
             <Center>
               <Stack align="center" gap="xs" py="md">
                 <Loader color="indigo" size="sm" />
-                <Text size="sm" c="dimmed">AI 正在分析你的持股...</Text>
-                <Text size="xs" c="dimmed">抓歷史價、算指標、呼叫 GPT，約 10-20 秒</Text>
+                <Text size="sm" c="dimmed">{STAGE_LABEL[stage].title}</Text>
+                <Text size="xs" c="dimmed">{STAGE_LABEL[stage].hint}</Text>
               </Stack>
             </Center>
           </Paper>
