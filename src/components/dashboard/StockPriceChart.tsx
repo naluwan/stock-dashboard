@@ -121,10 +121,18 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
   const [isLoading, setIsLoading] = useState(true);
   const [isFallback, setIsFallback] = useState(false);
   const [selectedTime, setSelectedTime] = useState('1d');
-  const [mode, setMode] = useState<ChartMode>('candle');
-  const [showBB, setShowBB] = useState(true);
+  const [mode, setMode] = useState<ChartMode>('line');
+  const [showBB, setShowBB] = useState(false);
 
   const currentTimeOption = TIME_OPTIONS.find((t) => t.key === selectedTime) || TIME_OPTIONS[0];
+
+  // 用 ref 存目前的時區設定，讓 chart formatter 永遠拿到最新值（不用重建 chart）
+  const intradayRef = useRef(currentTimeOption.intraday);
+  const marketRef = useRef(market);
+  useEffect(() => {
+    intradayRef.current = currentTimeOption.intraday;
+    marketRef.current = market;
+  }, [currentTimeOption.intraday, market]);
 
   // 抓資料
   useEffect(() => {
@@ -164,6 +172,45 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
     const textColor = isDark ? '#cbd5e1' : '#475569';
     const gridColor = isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(100, 116, 139, 0.08)';
 
+    const tz = () => (marketRef.current === 'TW' ? 'Asia/Taipei' : 'America/New_York');
+
+    const formatTick = (timeSec: number): string => {
+      const d = new Date(timeSec * 1000);
+      if (intradayRef.current) {
+        return d.toLocaleTimeString('zh-TW', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: tz(),
+          hour12: false,
+        });
+      }
+      return d.toLocaleDateString('zh-TW', {
+        month: 'numeric',
+        day: 'numeric',
+        timeZone: tz(),
+      });
+    };
+
+    const formatCrosshair = (timeSec: number): string => {
+      const d = new Date(timeSec * 1000);
+      if (intradayRef.current) {
+        return d.toLocaleString('zh-TW', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: tz(),
+          hour12: false,
+        });
+      }
+      return d.toLocaleDateString('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: tz(),
+      });
+    };
+
     const chart = createChart(containerRef.current, {
       autoSize: true,
       layout: {
@@ -186,6 +233,10 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
         borderVisible: false,
         timeVisible: currentTimeOption.intraday,
         secondsVisible: false,
+        tickMarkFormatter: (time: number) => formatTick(time),
+      },
+      localization: {
+        timeFormatter: (time: number) => formatCrosshair(time),
       },
     });
     chartRef.current = chart;
@@ -197,6 +248,15 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDark]); // 切換主題時重建（因為 layout colors 變動）
+
+  // 切換時間區間時，更新 timeScale 的 timeVisible（不重建 chart）
+  useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.timeScale().applyOptions({
+      timeVisible: currentTimeOption.intraday,
+    });
+    chartRef.current.timeScale().fitContent();
+  }, [currentTimeOption.intraday]);
 
   // 更新 series
   useEffect(() => {
