@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   ActionIcon,
   Alert,
@@ -24,9 +25,6 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowRight,
-  BarChart3,
-  DollarSign,
-  Clock,
   Star,
   History,
   Trash2,
@@ -53,6 +51,14 @@ interface HistoryItem {
 }
 
 export default function SearchPage() {
+  return (
+    <Suspense fallback={<Center h="100vh"><Loader color="teal" /></Center>}>
+      <SearchPageInner />
+    </Suspense>
+  );
+}
+
+function SearchPageInner() {
   const [query, setQuery] = useState('');
   const [market, setMarket] = useState<Market>('TW');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -157,7 +163,7 @@ export default function SearchPage() {
     }
   };
 
-  const handleGetQuote = async (symbol: string, stockMarket: Market, name?: string) => {
+  const handleGetQuote = useCallback(async (symbol: string, stockMarket: Market, name?: string) => {
     setIsLoadingQuote(true);
     setQuoteError(null);
     setSelectedQuote(null);
@@ -176,7 +182,19 @@ export default function SearchPage() {
     } finally {
       setIsLoadingQuote(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 從 URL query param 自動帶股
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const sym = searchParams.get('symbol');
+    const mkt = searchParams.get('market') as Market | null;
+    if (sym && (mkt === 'TW' || mkt === 'US')) {
+      setMarket(mkt);
+      handleGetQuote(sym, mkt);
+    }
+  }, [searchParams, handleGetQuote]);
 
   const isPositive = (selectedQuote?.change || 0) >= 0;
   const isFavorited = selectedQuote
@@ -326,14 +344,31 @@ export default function SearchPage() {
 
         {selectedQuote && !isLoadingQuote && (
           <Stack gap="md">
-            <Card withBorder radius="lg" p="md">
-              <Group justify="space-between" wrap="wrap" align="flex-start">
-                <Stack gap={2}>
-                  <Group gap="sm" wrap="nowrap">
-                    <Badge color={selectedQuote.market === 'TW' ? 'blue' : 'violet'} variant="light">
+            {/* Hero: 大字現價 */}
+            <Card
+              withBorder
+              radius="md"
+              p={0}
+              style={{ overflow: 'hidden' }}
+            >
+              <Group
+                justify="space-between"
+                wrap="wrap"
+                align="flex-end"
+                gap="md"
+                p={{ base: 'md', sm: 'lg' }}
+                style={{
+                  background: 'linear-gradient(135deg, var(--mantine-color-default-hover) 0%, transparent 100%)',
+                }}
+              >
+                <Stack gap={4} style={{ minWidth: 0, flex: 1 }}>
+                  <Group gap="xs" wrap="nowrap">
+                    <Badge size="sm" color={selectedQuote.market === 'TW' ? 'blue' : 'violet'} variant="light">
                       {selectedQuote.market === 'TW' ? '台股' : '美股'}
                     </Badge>
-                    <Title order={3}>{selectedQuote.symbol}</Title>
+                    <Text fw={700} size="xl" tt="uppercase" style={{ letterSpacing: 1 }}>
+                      {selectedQuote.symbol}
+                    </Text>
                     <ActionIcon
                       variant="subtle"
                       color={isFavorited ? 'yellow' : 'gray'}
@@ -345,40 +380,63 @@ export default function SearchPage() {
                       <Star size={20} fill={isFavorited ? 'currentColor' : 'none'} />
                     </ActionIcon>
                   </Group>
-                  <Text size="sm" c="dimmed">{selectedQuote.name}</Text>
+                  <Text size="sm" c="dimmed" truncate>{selectedQuote.name}</Text>
                 </Stack>
-                <Stack gap={2} align="flex-end">
-                  <Title order={2}>{formatCurrency(selectedQuote.currentPrice, selectedQuote.market)}</Title>
-                  <Group gap={4} c={isPositive ? 'teal' : 'red'}>
-                    {isPositive ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
-                    <Text fw={500}>
+                <Stack gap={2} align="flex-end" style={{ flexShrink: 0 }}>
+                  <Text fz={{ base: 32, sm: 40 }} fw={800} lh={1}>
+                    {formatCurrency(selectedQuote.currentPrice, selectedQuote.market)}
+                  </Text>
+                  <Group gap={6} c={isPositive ? 'red.6' : 'teal.6'}>
+                    {isPositive
+                      ? <TrendingUp size={18} />
+                      : <TrendingDown size={18} />}
+                    <Text fw={600} size="md">
                       {isPositive ? '+' : ''}
-                      {selectedQuote.change.toFixed(2)} ({formatPercent(selectedQuote.changePercent)})
+                      {selectedQuote.change.toFixed(2)}
+                    </Text>
+                    <Text fw={600} size="md">
+                      ({formatPercent(selectedQuote.changePercent)})
                     </Text>
                   </Group>
                 </Stack>
               </Group>
-            </Card>
 
-            <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-              {[
-                { label: '前日收盤', value: formatCurrency(selectedQuote.previousClose, selectedQuote.market), icon: DollarSign },
-                { label: '今日最高', value: formatCurrency(selectedQuote.high, selectedQuote.market), icon: TrendingUp },
-                { label: '今日最低', value: formatCurrency(selectedQuote.low, selectedQuote.market), icon: TrendingDown },
-                { label: '成交量', value: formatNumber(selectedQuote.volume, 0), icon: BarChart3 },
-              ].map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Card key={item.label} withBorder radius="lg" p="sm">
-                    <Group gap={6} c="dimmed">
-                      <Icon size={14} />
-                      <Text size="xs">{item.label}</Text>
-                    </Group>
-                    <Text size="lg" fw={700} mt={4}>{item.value}</Text>
-                  </Card>
-                );
-              })}
-            </SimpleGrid>
+              {/* 統計列 */}
+              <SimpleGrid
+                cols={{ base: 2, xs: 3, sm: 6 }}
+                spacing={0}
+                style={{
+                  borderTop: '1px solid var(--mantine-color-default-border)',
+                }}
+              >
+                {[
+                  { label: '前日收盤', value: formatCurrency(selectedQuote.previousClose, selectedQuote.market) },
+                  { label: '今日開盤', value: formatCurrency(selectedQuote.previousClose, selectedQuote.market) },
+                  { label: '今日最高', value: formatCurrency(selectedQuote.high, selectedQuote.market) },
+                  { label: '今日最低', value: formatCurrency(selectedQuote.low, selectedQuote.market) },
+                  { label: '成交量', value: formatNumber(selectedQuote.volume, 0) },
+                  { label: '更新時間', value: new Date(selectedQuote.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) },
+                ].map((item, i, arr) => (
+                  <Stack
+                    key={item.label}
+                    gap={2}
+                    px="md"
+                    py="sm"
+                    style={{
+                      borderRight:
+                        i < arr.length - 1
+                          ? '1px solid var(--mantine-color-default-border)'
+                          : 'none',
+                    }}
+                  >
+                    <Text size="10px" c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                      {item.label}
+                    </Text>
+                    <Text size="sm" fw={600} truncate>{item.value}</Text>
+                  </Stack>
+                ))}
+              </SimpleGrid>
+            </Card>
 
             <StockPriceChart
               symbol={selectedQuote.symbol}
@@ -410,12 +468,6 @@ export default function SearchPage() {
               );
             })()}
 
-            <Group justify="center" gap={6}>
-              <Clock size={12} color="var(--mantine-color-dimmed)" />
-              <Text size="sm" c="dimmed">
-                最後更新: {new Date(selectedQuote.updatedAt).toLocaleString('zh-TW')}
-              </Text>
-            </Group>
           </Stack>
         )}
 

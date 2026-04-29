@@ -16,7 +16,8 @@ import {
   Text,
   UnstyledButton,
 } from '@mantine/core';
-import { Edit2, Trash2, TrendingUp, TrendingDown, GripVertical, ChevronDown, ArrowDownToLine, History } from 'lucide-react';
+import Link from 'next/link';
+import { Edit2, Trash2, TrendingUp, TrendingDown, GripVertical, ChevronDown, ArrowDownToLine, History, ExternalLink } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
 import { formatCurrency, formatAmount, formatPercent, formatNumber, formatShares } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
@@ -65,6 +66,15 @@ function ActionButtons({
 }) {
   return (
     <Group gap={2} wrap="nowrap" justify="flex-end">
+      <ActionIcon
+        component={Link}
+        href={`/search?symbol=${encodeURIComponent(stock.symbol)}&market=${stock.market}`}
+        variant="subtle"
+        color="indigo"
+        aria-label="查看詳細"
+      >
+        <ExternalLink size={16} />
+      </ActionIcon>
       {stock.totalShares > 0 && (
         <ActionIcon variant="subtle" color="orange" onClick={() => onSell(stock)} aria-label="賣出">
           <ArrowDownToLine size={16} />

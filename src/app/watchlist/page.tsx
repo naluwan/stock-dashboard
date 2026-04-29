@@ -18,6 +18,7 @@ import {
   ThemeIcon,
   UnstyledButton,
 } from '@mantine/core';
+import Link from 'next/link';
 import {
   Star,
   TrendingUp,
@@ -26,6 +27,7 @@ import {
   DollarSign,
   GripVertical,
   ChevronDown,
+  ExternalLink,
 } from 'lucide-react';
 import {
   DndContext,
@@ -137,14 +139,25 @@ function SortableCard({
               </Group>
             </UnstyledButton>
           </Group>
-          <ActionIcon
-            variant="subtle"
-            color="yellow"
-            onClick={() => onRemove(item.symbol, item.market)}
-            aria-label="移除自選"
-          >
-            <Star size={16} fill="currentColor" />
-          </ActionIcon>
+          <Group gap={2} wrap="nowrap">
+            <ActionIcon
+              component={Link}
+              href={`/search?symbol=${encodeURIComponent(item.symbol)}&market=${item.market}`}
+              variant="subtle"
+              color="indigo"
+              aria-label="查看詳細"
+            >
+              <ExternalLink size={16} />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              color="yellow"
+              onClick={() => onRemove(item.symbol, item.market)}
+              aria-label="移除自選"
+            >
+              <Star size={16} fill="currentColor" />
+            </ActionIcon>
+          </Group>
         </Group>
 
         {price && (
@@ -289,14 +302,25 @@ function SortableTableRow({
           </Text>
         </Table.Td>
         <Table.Td ta="center">
-          <ActionIcon
-            variant="subtle"
-            color="yellow"
-            onClick={() => onRemove(item.symbol, item.market)}
-            aria-label="移除自選"
-          >
-            <Star size={16} fill="currentColor" />
-          </ActionIcon>
+          <Group gap={2} justify="center" wrap="nowrap">
+            <ActionIcon
+              component={Link}
+              href={`/search?symbol=${encodeURIComponent(item.symbol)}&market=${item.market}`}
+              variant="subtle"
+              color="indigo"
+              aria-label="查看詳細"
+            >
+              <ExternalLink size={16} />
+            </ActionIcon>
+            <ActionIcon
+              variant="subtle"
+              color="yellow"
+              onClick={() => onRemove(item.symbol, item.market)}
+              aria-label="移除自選"
+            >
+              <Star size={16} fill="currentColor" />
+            </ActionIcon>
+          </Group>
         </Table.Td>
       </Table.Tr>
       {isExpanded && (
