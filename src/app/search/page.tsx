@@ -36,6 +36,8 @@ import { IStock, Market, PriceData } from '@/types';
 import { enrichStockWithCalculations, formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import StockPriceChart from '@/components/dashboard/StockPriceChart';
 import StockAnalysis from '@/components/stocks/StockAnalysis';
+import StockFundamentals from '@/components/stocks/StockFundamentals';
+import MarketIndicesPanel from '@/components/dashboard/MarketIndicesPanel';
 
 interface SearchResult {
   symbol: string;
@@ -186,6 +188,8 @@ export default function SearchPage() {
       <Header title="股票搜尋" subtitle="查詢即時股價和相關資訊" />
 
       <Stack p={{ base: 'md', sm: 'xl' }} gap="md">
+        <MarketIndicesPanel />
+
         <Card withBorder radius="lg" p="md">
           <Stack gap="sm">
             <SegmentedControl
@@ -380,6 +384,11 @@ export default function SearchPage() {
               symbol={selectedQuote.symbol}
               market={selectedQuote.market}
               currentPrice={selectedQuote.currentPrice}
+            />
+
+            <StockFundamentals
+              symbol={selectedQuote.symbol}
+              market={selectedQuote.market}
             />
 
             {(() => {

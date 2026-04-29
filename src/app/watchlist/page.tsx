@@ -45,6 +45,7 @@ import { CSS } from '@dnd-kit/utilities';
 import Header from '@/components/layout/Header';
 import StockPriceChart from '@/components/dashboard/StockPriceChart';
 import StockAnalysis from '@/components/stocks/StockAnalysis';
+import MarketIndicesPanel from '@/components/dashboard/MarketIndicesPanel';
 import { IStock, Market, PriceData, StockWithCalculations } from '@/types';
 import { enrichStockWithCalculations, formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 
@@ -462,6 +463,8 @@ export default function WatchlistPage() {
       />
 
       <Stack p={{ base: 'md', sm: 'xl' }} gap="md">
+        <MarketIndicesPanel />
+
         {usdRate > 0 && (
           <Group gap={4}>
             <DollarSign size={12} color="var(--mantine-color-dimmed)" />

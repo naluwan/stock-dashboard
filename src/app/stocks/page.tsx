@@ -8,6 +8,7 @@ import StockTable from '@/components/stocks/StockTable';
 import AddStockForm from '@/components/stocks/AddStockForm';
 import SellStockForm from '@/components/stocks/SellStockForm';
 import SellHistoryList from '@/components/stocks/SellHistoryList';
+import MarketIndicesPanel from '@/components/dashboard/MarketIndicesPanel';
 import { StockWithCalculations, IStock, Market, Purchase } from '@/types';
 import { enrichStockWithCalculations } from '@/lib/utils';
 import { Plus, DollarSign, Eye, EyeOff } from 'lucide-react';
@@ -222,6 +223,8 @@ export default function StocksPage() {
       <Header title="持股管理" subtitle="管理你的股票投資組合" onRefresh={fetchStocks} />
 
       <Stack p={{ base: 'md', sm: 'xl' }} gap="md">
+        <MarketIndicesPanel />
+
         <Group justify="space-between" wrap="wrap" gap="sm">
           <Group gap="md">
             <Text size="sm" c="dimmed">共 {stocks.length} 檔持股</Text>
