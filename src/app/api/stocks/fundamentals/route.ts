@@ -4,7 +4,7 @@ import { Market } from '@/types';
 export const runtime = 'nodejs';
 
 interface QuarterlyData {
-  date: string; // 'YYYY-Qx'
+  date: string;
   value: number | null;
 }
 
@@ -16,34 +16,26 @@ interface DividendItem {
 interface FundamentalsResponse {
   symbol: string;
   market: Market;
-  // 估值
   marketCap: number | null;
   peTrailing: number | null;
   peForward: number | null;
   eps: number | null;
-  dividendYield: number | null; // 殖利率 (decimal, e.g. 0.025 = 2.5%)
-  // 52W
+  dividendYield: number | null;
   weekHigh52: number | null;
   weekLow52: number | null;
-  // 開高低收
   priceOpen: number | null;
   priceHigh: number | null;
   priceLow: number | null;
-  // 獲利率
-  profitMargin: number | null; // 淨利率
-  operatingMargin: number | null; // 營益率
-  grossMargin: number | null; // 毛利率
+  profitMargin: number | null;
+  operatingMargin: number | null;
+  grossMargin: number | null;
   roe: number | null;
   roa: number | null;
-  // 成長
-  revenueGrowth: number | null; // YoY
-  earningsGrowth: number | null; // YoY
-  // 季營收 / EPS
+  revenueGrowth: number | null;
+  earningsGrowth: number | null;
   quarterlyRevenue: QuarterlyData[];
   quarterlyEarnings: QuarterlyData[];
-  // 股利
   dividends: DividendItem[];
-  // 來源
   fetchedAt: string;
 }
 
@@ -75,81 +67,76 @@ function emptyResponse(symbol: string, market: Market): FundamentalsResponse {
   };
 }
 
-interface QuoteSummaryResult {
-  result?: Array<Record<string, unknown>>;
-}
-
-function pickNumber(obj: unknown, ...path: string[]): number | null {
-  let cur: unknown = obj;
-  for (const key of path) {
-    if (typeof cur !== 'object' || cur === null) return null;
-    cur = (cur as Record<string, unknown>)[key];
-  }
-  if (typeof cur === 'number' && Number.isFinite(cur)) return cur;
-  if (cur && typeof cur === 'object' && 'raw' in cur) {
-    const raw = (cur as { raw?: unknown }).raw;
+function num(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (v && typeof v === 'object' && 'raw' in (v as Record<string, unknown>)) {
+    const raw = (v as { raw?: unknown }).raw;
     if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
   }
   return null;
 }
 
-async function fetchQuoteSummary(symbol: string): Promise<Record<string, unknown>> {
-  const modules = [
-    'summaryDetail',
-    'price',
-    'defaultKeyStatistics',
-    'financialData',
-    'earnings',
-    'incomeStatementHistoryQuarterly',
-  ].join(',');
-
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
-
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    cache: 'no-store',
-  });
-  if (!res.ok) return {};
-
-  const data = (await res.json()) as { quoteSummary?: QuoteSummaryResult };
-  const result = data?.quoteSummary?.result?.[0];
-  return (result as Record<string, unknown>) || {};
-}
-
 interface DividendEvent {
   amount: number;
-  date: number; // unix timestamp
+  date: number;
 }
 
 async function fetchDividends(symbol: string): Promise<DividendItem[]> {
-  // 抓 5 年股利（用 chart endpoint 加 events=div）
+  // /v8/finance/chart 不需要 crumb
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     symbol,
   )}?interval=1mo&range=5y&events=div`;
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    cache: 'no-store',
-  });
-  if (!res.ok) return [];
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
 
-  const data = await res.json();
-  const events = data?.chart?.result?.[0]?.events?.dividends as
-    | Record<string, DividendEvent>
-    | undefined;
-  if (!events) return [];
+    const data = await res.json();
+    const events = data?.chart?.result?.[0]?.events?.dividends as
+      | Record<string, DividendEvent>
+      | undefined;
+    if (!events) return [];
 
-  const yearMap = new Map<number, number>();
-  for (const key of Object.keys(events)) {
-    const ev = events[key];
-    if (!ev || typeof ev.amount !== 'number' || typeof ev.date !== 'number') continue;
-    const year = new Date(ev.date * 1000).getFullYear();
-    yearMap.set(year, (yearMap.get(year) || 0) + ev.amount);
+    const yearMap = new Map<number, number>();
+    for (const key of Object.keys(events)) {
+      const ev = events[key];
+      if (!ev || typeof ev.amount !== 'number' || typeof ev.date !== 'number') continue;
+      const year = new Date(ev.date * 1000).getFullYear();
+      yearMap.set(year, (yearMap.get(year) || 0) + ev.amount);
+    }
+
+    return Array.from(yearMap.entries())
+      .map(([year, amount]) => ({ year, amount: Math.round(amount * 1000) / 1000 }))
+      .sort((a, b) => b.year - a.year)
+      .slice(0, 5);
+  } catch {
+    return [];
   }
+}
 
-  return Array.from(yearMap.entries())
-    .map(([year, amount]) => ({ year, amount: Math.round(amount * 1000) / 1000 }))
-    .sort((a, b) => b.year - a.year)
-    .slice(0, 5);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchSummary(symbol: string): Promise<any | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const YahooFinance = (await import('yahoo-finance2')).default as any;
+    const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const result = await yahooFinance.quoteSummary(symbol, {
+      modules: [
+        'summaryDetail',
+        'price',
+        'defaultKeyStatistics',
+        'financialData',
+        'earnings',
+        'incomeStatementHistoryQuarterly',
+      ],
+    });
+    return result;
+  } catch (error) {
+    console.error(`fetchSummary failed for ${symbol}:`, error);
+    return null;
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -164,62 +151,61 @@ export async function GET(request: NextRequest) {
 
     const yahooSymbol = market === 'TW' ? `${symbol}.TW` : symbol;
 
-    let summary = await fetchQuoteSummary(yahooSymbol);
+    let summary = await fetchSummary(yahooSymbol);
     // 台股可能是上櫃 (.TWO)
-    if ((!summary || Object.keys(summary).length === 0) && market === 'TW') {
-      summary = await fetchQuoteSummary(`${symbol}.TWO`);
+    if (!summary && market === 'TW') {
+      summary = await fetchSummary(`${symbol}.TWO`);
     }
 
     const dividends = await fetchDividends(
       market === 'TW' ? `${symbol}.TW` : symbol,
-    ).catch(() => []);
+    );
 
     const response = emptyResponse(symbol, market);
 
-    if (summary && Object.keys(summary).length > 0) {
-      response.marketCap = pickNumber(summary, 'price', 'marketCap');
-      response.peTrailing = pickNumber(summary, 'summaryDetail', 'trailingPE');
-      response.peForward = pickNumber(summary, 'summaryDetail', 'forwardPE');
-      response.eps = pickNumber(summary, 'defaultKeyStatistics', 'trailingEps');
-      response.dividendYield =
-        pickNumber(summary, 'summaryDetail', 'dividendYield') ??
-        pickNumber(summary, 'summaryDetail', 'trailingAnnualDividendYield');
-      response.weekHigh52 = pickNumber(summary, 'summaryDetail', 'fiftyTwoWeekHigh');
-      response.weekLow52 = pickNumber(summary, 'summaryDetail', 'fiftyTwoWeekLow');
-      response.priceOpen = pickNumber(summary, 'summaryDetail', 'open');
-      response.priceHigh = pickNumber(summary, 'summaryDetail', 'dayHigh');
-      response.priceLow = pickNumber(summary, 'summaryDetail', 'dayLow');
+    if (summary) {
+      const sd = summary.summaryDetail || {};
+      const price = summary.price || {};
+      const ks = summary.defaultKeyStatistics || {};
+      const fd = summary.financialData || {};
+      const earnings = summary.earnings || {};
 
-      // financialData
-      response.profitMargin = pickNumber(summary, 'financialData', 'profitMargins');
-      response.operatingMargin = pickNumber(summary, 'financialData', 'operatingMargins');
-      response.grossMargin = pickNumber(summary, 'financialData', 'grossMargins');
-      response.roe = pickNumber(summary, 'financialData', 'returnOnEquity');
-      response.roa = pickNumber(summary, 'financialData', 'returnOnAssets');
-      response.revenueGrowth = pickNumber(summary, 'financialData', 'revenueGrowth');
-      response.earningsGrowth = pickNumber(summary, 'financialData', 'earningsGrowth');
+      response.marketCap = num(price.marketCap) ?? num(sd.marketCap);
+      response.peTrailing = num(sd.trailingPE) ?? num(ks.trailingPE);
+      response.peForward = num(sd.forwardPE) ?? num(ks.forwardPE);
+      response.eps = num(ks.trailingEps);
+      response.dividendYield = num(sd.dividendYield) ?? num(sd.trailingAnnualDividendYield);
+      response.weekHigh52 = num(sd.fiftyTwoWeekHigh);
+      response.weekLow52 = num(sd.fiftyTwoWeekLow);
+      response.priceOpen = num(sd.open) ?? num(price.regularMarketOpen);
+      response.priceHigh = num(sd.dayHigh) ?? num(price.regularMarketDayHigh);
+      response.priceLow = num(sd.dayLow) ?? num(price.regularMarketDayLow);
+
+      response.profitMargin = num(fd.profitMargins);
+      response.operatingMargin = num(fd.operatingMargins);
+      response.grossMargin = num(fd.grossMargins);
+      response.roe = num(fd.returnOnEquity);
+      response.roa = num(fd.returnOnAssets);
+      response.revenueGrowth = num(fd.revenueGrowth);
+      response.earningsGrowth = num(fd.earningsGrowth);
 
       // 季財報
-      const earnings = summary.earnings as Record<string, unknown> | undefined;
-      if (earnings) {
-        const quarterly = (earnings.financialsChart as Record<string, unknown> | undefined)
-          ?.quarterly as Array<Record<string, unknown>> | undefined;
-        if (Array.isArray(quarterly)) {
-          response.quarterlyRevenue = quarterly
-            .map((q) => ({
-              date: typeof q.date === 'string' ? q.date : '',
-              value: pickNumber(q, 'revenue'),
-            }))
-            .filter((q) => q.date)
-            .slice(-4);
-          response.quarterlyEarnings = quarterly
-            .map((q) => ({
-              date: typeof q.date === 'string' ? q.date : '',
-              value: pickNumber(q, 'earnings'),
-            }))
-            .filter((q) => q.date)
-            .slice(-4);
-        }
+      const quarterlyChart = earnings?.financialsChart?.quarterly;
+      if (Array.isArray(quarterlyChart)) {
+        response.quarterlyRevenue = quarterlyChart
+          .map((q: { date?: string; revenue?: unknown }) => ({
+            date: typeof q.date === 'string' ? q.date : '',
+            value: num(q.revenue),
+          }))
+          .filter((q: QuarterlyData) => q.date)
+          .slice(-4);
+        response.quarterlyEarnings = quarterlyChart
+          .map((q: { date?: string; earnings?: unknown }) => ({
+            date: typeof q.date === 'string' ? q.date : '',
+            value: num(q.earnings),
+          }))
+          .filter((q: QuarterlyData) => q.date)
+          .slice(-4);
       }
     }
 
