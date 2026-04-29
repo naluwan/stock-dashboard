@@ -17,7 +17,6 @@ import {
   Group,
   Loader,
   SegmentedControl,
-  Stack,
   Switch,
   Text,
 } from '@mantine/core';
@@ -27,6 +26,7 @@ import { Market } from '@/types';
 
 interface HistoryDataPoint {
   date: string;
+  time: number; // UNIX 秒
   open: number;
   high: number;
   low: number;
@@ -64,8 +64,22 @@ const COLOR_LINE = '#10b981'; // 線圖收盤線
 const COLOR_BB_BAND = '#8b5cf6'; // 布林通道紫
 const COLOR_BB_MID = '#f59e0b'; // 中軸（20MA）橘
 
-function toTime(dateStr: string): UTCTimestamp {
-  return Math.floor(new Date(dateStr).getTime() / 1000) as UTCTimestamp;
+function asTime(t: number): UTCTimestamp {
+  return t as UTCTimestamp;
+}
+
+// 排序 + 去重（lightweight-charts 要求嚴格遞增 time）
+function normalize(data: HistoryDataPoint[]): HistoryDataPoint[] {
+  const sorted = [...data]
+    .filter((d) => Number.isFinite(d.time) && d.time > 0)
+    .sort((a, b) => a.time - b.time);
+  const out: HistoryDataPoint[] = [];
+  for (const d of sorted) {
+    if (out.length === 0 || out[out.length - 1].time !== d.time) {
+      out.push(d);
+    }
+  }
+  return out;
 }
 
 // 簡單版布林通道（period=20, std=2）
@@ -206,8 +220,8 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
         wickDownColor: COLOR_DOWN,
       });
       candleSeries.setData(
-        data.map((d) => ({
-          time: toTime(d.date),
+        normalize(data).map((d) => ({
+          time: asTime(d.time),
           open: d.open,
           high: d.high,
           low: d.low,
@@ -222,7 +236,7 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
         priceLineVisible: false,
       });
       lineSeries.setData(
-        data.map((d) => ({ time: toTime(d.date), value: d.close })),
+        normalize(data).map((d) => ({ time: asTime(d.time), value: d.close })),
       );
       seriesRefs.current.push(lineSeries);
     }
@@ -238,8 +252,8 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
       scaleMargins: { top: 0.75, bottom: 0 },
     });
     volumeSeries.setData(
-      data.map((d) => ({
-        time: toTime(d.date),
+      normalize(data).map((d) => ({
+        time: asTime(d.time),
         value: d.volume,
         color: d.close >= d.open
           ? 'rgba(239, 68, 68, 0.4)'
@@ -250,12 +264,13 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
 
     // 布林通道
     if (showBB && data.length >= 20) {
-      const closes = data.map((d) => d.close);
+      const sortedData = normalize(data);
+      const closes = sortedData.map((d) => d.close);
       const bb = calculateBollinger(closes);
 
       const filterValid = (arr: (number | null)[]) =>
-        data
-          .map((d, i) => (arr[i] !== null ? { time: toTime(d.date), value: arr[i]! } : null))
+        sortedData
+          .map((d, i) => (arr[i] !== null ? { time: asTime(d.time), value: arr[i]! } : null))
           .filter((x): x is { time: UTCTimestamp; value: number } => x !== null);
 
       const upperSeries = chart.addSeries(LineSeries, {
@@ -329,43 +344,78 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
 
   const isIntraday = currentTimeOption.intraday && !isFallback;
 
+  // 圖表 pane 的深色（比 Card bg 再暗一階，做出層次）
+  const paneBg = isDark ? '#0b0e14' : '#fafafa';
+
   return (
-    <Card withBorder radius="lg" p="md">
-      <Stack gap="sm">
-        <Group justify="space-between" wrap="wrap" gap="xs">
-          <Group gap="xs">
-            <Text fw={500} size="sm">價格走勢</Text>
-            {isIntraday && (
-              <Text size="10px" c="dimmed">
-                {market === 'US' ? '(美東時間)' : '(台灣時間)'}
-              </Text>
-            )}
-          </Group>
-          <Group gap="xs" wrap="wrap">
-            <Switch
-              size="xs"
-              label="布林"
-              checked={showBB}
-              onChange={(e) => setShowBB(e.currentTarget.checked)}
-            />
-            {timeSelector}
-            {modeSelector}
-          </Group>
-        </Group>
-
-        {isFallback && (
-          <Text ta="center" size="xs" c="yellow">
-            非交易時間，顯示最近交易日資料
+    <Card
+      withBorder
+      radius="md"
+      p={0}
+      style={{
+        overflow: 'hidden',
+        borderColor: isDark ? 'rgba(148,163,184,0.15)' : 'rgba(100,116,139,0.15)',
+      }}
+    >
+      {/* 上方工具列 */}
+      <Group
+        justify="space-between"
+        wrap="wrap"
+        gap="xs"
+        px="md"
+        py="sm"
+        style={{
+          borderBottom: `1px solid ${isDark ? 'rgba(148,163,184,0.15)' : 'rgba(100,116,139,0.15)'}`,
+          background: isDark ? '#131722' : '#ffffff',
+        }}
+      >
+        <Group gap="xs">
+          <Text fw={600} size="sm" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+            {symbol}
           </Text>
-        )}
+          {isIntraday && (
+            <Text size="10px" c="dimmed">
+              {market === 'US' ? '美東' : '台北'}
+            </Text>
+          )}
+        </Group>
+        <Group gap="xs" wrap="wrap">
+          <Switch
+            size="xs"
+            label="布林"
+            checked={showBB}
+            onChange={(e) => setShowBB(e.currentTarget.checked)}
+          />
+          {timeSelector}
+          {modeSelector}
+        </Group>
+      </Group>
 
-        <div style={{ position: 'relative', minHeight: 320 }}>
+      {isFallback && (
+        <Text
+          ta="center"
+          size="xs"
+          c="yellow"
+          py={4}
+          style={{ background: isDark ? 'rgba(234,179,8,0.05)' : 'rgba(234,179,8,0.08)' }}
+        >
+          非交易時間，顯示最近交易日資料
+        </Text>
+      )}
+
+      <div
+        style={{
+          position: 'relative',
+          minHeight: 380,
+          background: paneBg,
+        }}
+      >
           {isLoading && (
             <Center
               style={{
                 position: 'absolute',
                 inset: 0,
-                background: 'rgba(0,0,0,0.05)',
+                background: 'rgba(0,0,0,0.15)',
                 zIndex: 1,
               }}
             >
@@ -373,7 +423,7 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
             </Center>
           )}
           {!isLoading && data.length === 0 && (
-            <Center h={320}>
+            <Center h={380}>
               <Text c="dimmed" size="sm">
                 {currentTimeOption.intraday ? '目前無當日分時資料（可能非交易時間）' : '暫無歷史資料'}
               </Text>
@@ -383,13 +433,24 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
             ref={containerRef}
             style={{
               width: '100%',
-              height: 320,
+              height: 380,
               display: data.length === 0 && !isLoading ? 'none' : 'block',
             }}
           />
         </div>
 
-        <Group justify="center" gap="md" wrap="wrap">
+        {/* 底部圖例 */}
+        <Group
+          justify="center"
+          gap="md"
+          wrap="wrap"
+          px="md"
+          py={6}
+          style={{
+            borderTop: `1px solid ${isDark ? 'rgba(148,163,184,0.1)' : 'rgba(100,116,139,0.1)'}`,
+            background: isDark ? '#131722' : '#ffffff',
+          }}
+        >
           {mode === 'candle' && (
             <>
               <Group gap={4}>
@@ -409,10 +470,10 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
             </Group>
           )}
           {showBB && (
-            <Group gap="md">
+            <>
               <Group gap={4}>
                 <div style={{ width: 16, height: 1, background: COLOR_BB_BAND }} />
-                <Text size="xs" c="dimmed">布林通道上下軌</Text>
+                <Text size="xs" c="dimmed">布林通道</Text>
               </Group>
               <Group gap={4}>
                 <div
@@ -424,14 +485,13 @@ export default function StockPriceChart({ symbol, market, currentPrice }: StockP
                 />
                 <Text size="xs" c="dimmed">20 日均線</Text>
               </Group>
-            </Group>
+            </>
           )}
           <Group gap={4}>
             <div style={{ width: 8, height: 12, background: 'rgba(148,163,184,0.4)', borderRadius: 2 }} />
             <Text size="xs" c="dimmed">成交量</Text>
           </Group>
         </Group>
-      </Stack>
     </Card>
   );
 }

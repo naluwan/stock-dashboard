@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Market } from '@/types';
 
 interface HistoryDataPoint {
-  date: string;
+  date: string; // 顯示用 label
+  time: number; // UNIX 秒，給圖表用
   open: number;
   high: number;
   low: number;
@@ -62,6 +63,7 @@ async function fetchIntraday(symbol: string, market: Market): Promise<HistoryDat
             minute: '2-digit',
             timeZone: market === 'TW' ? 'Asia/Taipei' : 'America/New_York',
           }),
+          time: timestamps[i],
           open: ohlcv.open?.[i] || 0,
           high: ohlcv.high?.[i] || 0,
           low: ohlcv.low?.[i] || 0,
@@ -115,6 +117,7 @@ async function fetchUSHistoryFallback(symbol: string, days: number): Promise<His
         : { month: '2-digit', day: '2-digit' };
       points.push({
         date: new Date(timestamps[i] * 1000).toLocaleDateString('zh-TW', dateOpts),
+        time: timestamps[i],
         open: ohlcv.open?.[i] || 0,
         high: ohlcv.high?.[i] || 0,
         low: ohlcv.low?.[i] || 0,
@@ -158,6 +161,7 @@ async function fetchDailyHistory(symbol: string, market: Market, days: number): 
       : { month: '2-digit', day: '2-digit' };
     return result.slice(-days).map((item: any) => ({
       date: new Date(item.date).toLocaleDateString('zh-TW', dateOpts),
+      time: Math.floor(new Date(item.date).getTime() / 1000),
       open: item.open || 0,
       high: item.high || 0,
       low: item.low || 0,
@@ -196,14 +200,20 @@ async function fetchTWHistoryFallback(symbol: string, days: number): Promise<His
       const data = await res.json();
 
       if (data.stat === 'OK' && data.data) {
-        const monthData = data.data.map((row: string[]) => ({
-          date: row[0].replace(/\//g, '/'),
-          open: parseFloat(row[3]?.replace(/,/g, '')) || 0,
-          high: parseFloat(row[4]?.replace(/,/g, '')) || 0,
-          low: parseFloat(row[5]?.replace(/,/g, '')) || 0,
-          close: parseFloat(row[6]?.replace(/,/g, '')) || 0,
-          volume: parseInt(row[1]?.replace(/,/g, '')) || 0,
-        }));
+        const monthData = data.data.map((row: string[]) => {
+          const [rocYear, m, d] = (row[0] || '').split('/');
+          const yr = parseInt(rocYear) + 1911;
+          const time = Math.floor(new Date(yr, parseInt(m) - 1, parseInt(d)).getTime() / 1000);
+          return {
+            date: `${m}/${d}`,
+            time,
+            open: parseFloat(row[3]?.replace(/,/g, '')) || 0,
+            high: parseFloat(row[4]?.replace(/,/g, '')) || 0,
+            low: parseFloat(row[5]?.replace(/,/g, '')) || 0,
+            close: parseFloat(row[6]?.replace(/,/g, '')) || 0,
+            volume: parseInt(row[1]?.replace(/,/g, '')) || 0,
+          };
+        });
         allData.unshift(...monthData);
         continue;
       }
@@ -214,14 +224,20 @@ async function fetchTWHistoryFallback(symbol: string, days: number): Promise<His
       const otcData = await otcRes.json();
 
       if (otcData.aaData && Array.isArray(otcData.aaData)) {
-        const monthData = otcData.aaData.map((row: string[]) => ({
-          date: row[0],
-          open: parseFloat(row[3]?.replace(/,/g, '')) || 0,
-          high: parseFloat(row[4]?.replace(/,/g, '')) || 0,
-          low: parseFloat(row[5]?.replace(/,/g, '')) || 0,
-          close: parseFloat(row[6]?.replace(/,/g, '')) || 0,
-          volume: parseInt(row[1]?.replace(/,/g, '')) || 0,
-        }));
+        const monthData = otcData.aaData.map((row: string[]) => {
+          const [rocYear, m, d] = (row[0] || '').split('/');
+          const yr = parseInt(rocYear) + 1911;
+          const time = Math.floor(new Date(yr, parseInt(m) - 1, parseInt(d)).getTime() / 1000);
+          return {
+            date: `${m}/${d}`,
+            time,
+            open: parseFloat(row[3]?.replace(/,/g, '')) || 0,
+            high: parseFloat(row[4]?.replace(/,/g, '')) || 0,
+            low: parseFloat(row[5]?.replace(/,/g, '')) || 0,
+            close: parseFloat(row[6]?.replace(/,/g, '')) || 0,
+            volume: parseInt(row[1]?.replace(/,/g, '')) || 0,
+          };
+        });
         allData.unshift(...monthData);
       }
     }
