@@ -48,8 +48,8 @@ import Header from '@/components/layout/Header';
 import StockPriceChart from '@/components/dashboard/StockPriceChart';
 import StockAnalysis from '@/components/stocks/StockAnalysis';
 import MarketIndicesPanel from '@/components/dashboard/MarketIndicesPanel';
-import { IStock, Market, PriceData, StockWithCalculations } from '@/types';
-import { enrichStockWithCalculations, formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
+import { IStock, Market, PriceData, StockWithCalculations, ITradingConfig } from '@/types';
+import { enrichStockWithCalculations, formatCurrency, formatPercent, formatNumber, DEFAULT_TRADING_CONFIG } from '@/lib/utils';
 
 interface FavoriteItem {
   _id: string;
@@ -354,13 +354,14 @@ export default function WatchlistPage() {
   const [usdRate, setUsdRate] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [ownedMap, setOwnedMap] = useState<Map<string, IStock>>(new Map());
+  const [tradingConfig, setTradingConfig] = useState<ITradingConfig>(DEFAULT_TRADING_CONFIG);
 
   const getOwnedStock = useCallback(
     (symbol: string, market: Market, currentPrice?: number): StockWithCalculations | null => {
       const owned = ownedMap.get(`${market}_${symbol}`);
-      return owned ? enrichStockWithCalculations(owned, currentPrice) : null;
+      return owned ? enrichStockWithCalculations(owned, currentPrice, tradingConfig) : null;
     },
-    [ownedMap],
+    [ownedMap, tradingConfig],
   );
 
   const sensors = useSensors(
@@ -394,15 +395,23 @@ export default function WatchlistPage() {
 
   const loadFavorites = useCallback(async () => {
     try {
-      const [res, rateRes, stocksRes] = await Promise.all([
+      const [res, rateRes, stocksRes, configRes] = await Promise.all([
         fetch('/api/favorites'),
         fetch('/api/exchange-rate'),
         fetch('/api/stocks'),
+        fetch('/api/trading-config'),
       ]);
 
       try {
         const rateData = await rateRes.json();
         setUsdRate(rateData.rate || 0);
+      } catch { /* ignore */ }
+
+      try {
+        const configData = await configRes.json();
+        if (configData && typeof configData.twStockFeeRate === 'number') {
+          setTradingConfig(configData);
+        }
       } catch { /* ignore */ }
 
       try {

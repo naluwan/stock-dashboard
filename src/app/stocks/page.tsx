@@ -10,7 +10,7 @@ import SellStockForm from '@/components/stocks/SellStockForm';
 import SellHistoryList from '@/components/stocks/SellHistoryList';
 import MarketIndicesPanel from '@/components/dashboard/MarketIndicesPanel';
 import { StockWithCalculations, IStock, Market, Purchase } from '@/types';
-import { enrichStockWithCalculations } from '@/lib/utils';
+import { enrichStockWithCalculations, DEFAULT_TRADING_CONFIG } from '@/lib/utils';
 import { Plus, DollarSign, Eye, EyeOff } from 'lucide-react';
 import { confirmToast } from '@/lib/confirmToast';
 import {
@@ -41,15 +41,24 @@ export default function StocksPage() {
 
   const fetchStocks = useCallback(async () => {
     try {
-      const [res, rateRes] = await Promise.all([
+      const [res, rateRes, configRes] = await Promise.all([
         fetch('/api/stocks'),
         fetch('/api/exchange-rate'),
+        fetch('/api/trading-config'),
       ]);
       const data: IStock[] = await res.json();
 
       try {
         const rateData = await rateRes.json();
         setUsdRate(rateData.rate || 0);
+      } catch { /* ignore */ }
+
+      let config = DEFAULT_TRADING_CONFIG;
+      try {
+        const configData = await configRes.json();
+        if (configData && typeof configData.twStockFeeRate === 'number') {
+          config = configData;
+        }
       } catch { /* ignore */ }
 
       if (data.length > 0) {
@@ -63,11 +72,11 @@ export default function StocksPage() {
           const enriched = data.map((stock) => {
             const priceKey = `${stock.market}_${stock.symbol}`;
             const priceData = pricesData[priceKey];
-            return enrichStockWithCalculations(stock, priceData?.currentPrice);
+            return enrichStockWithCalculations(stock, priceData?.currentPrice, config);
           });
           setStocks(enriched);
         } catch {
-          setStocks(data.map((s) => enrichStockWithCalculations(s)));
+          setStocks(data.map((s) => enrichStockWithCalculations(s, undefined, config)));
         }
       } else {
         setStocks([]);

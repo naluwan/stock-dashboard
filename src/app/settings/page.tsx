@@ -18,7 +18,9 @@ import { CheckCircle2, Send, AlertCircle } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import EmailSettings from '@/components/settings/EmailSettings';
 import LineSettings from '@/components/settings/LineSettings';
-import { INotificationConfig } from '@/types';
+import TradingFeeSettings from '@/components/settings/TradingFeeSettings';
+import { INotificationConfig, ITradingConfig } from '@/types';
+import { DEFAULT_TRADING_CONFIG } from '@/lib/utils';
 
 interface TestResult {
   channel: string;
@@ -28,6 +30,7 @@ interface TestResult {
 
 export default function SettingsPage() {
   const [config, setConfig] = useState<INotificationConfig | null>(null);
+  const [tradingConfig, setTradingConfig] = useState<ITradingConfig>(DEFAULT_TRADING_CONFIG);
   const [isLoading, setIsLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState('');
   const [testResults, setTestResults] = useState<TestResult[]>([]);
@@ -35,9 +38,18 @@ export default function SettingsPage() {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications');
-      const data = await res.json();
+      const [notifRes, tradingRes] = await Promise.all([
+        fetch('/api/notifications'),
+        fetch('/api/trading-config'),
+      ]);
+      const data = await notifRes.json();
       setConfig(data);
+      try {
+        const tradingData = await tradingRes.json();
+        if (tradingData && typeof tradingData.twStockFeeRate === 'number') {
+          setTradingConfig(tradingData);
+        }
+      } catch { /* ignore */ }
     } catch (error) {
       console.error('Failed to fetch config:', error);
     } finally {
@@ -64,6 +76,23 @@ export default function SettingsPage() {
     if (res.ok) {
       const data = await res.json();
       setConfig(data);
+      showSaveSuccess();
+    }
+  };
+
+  const handleSaveTrading = async (next: ITradingConfig) => {
+    const res = await fetch('/api/trading-config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        twStockFeeRate: next.twStockFeeRate,
+        twStockMinFee: next.twStockMinFee,
+        usStockFeeRate: next.usStockFeeRate,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setTradingConfig(data);
       showSaveSuccess();
     }
   };
@@ -115,7 +144,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <Header title="通知設定" subtitle="管理 Email 和 LINE 通知" />
+      <Header title="設定" subtitle="管理交易手續費與通知" />
 
       <Stack p={{ base: 'md', sm: 'xl' }} gap="lg">
         {saveMessage && (
@@ -124,6 +153,7 @@ export default function SettingsPage() {
           </Alert>
         )}
 
+        <TradingFeeSettings config={tradingConfig} onSave={handleSaveTrading} />
         <EmailSettings config={config.email} onSave={handleSaveEmail} />
         <LineSettings config={config.line} onSave={handleSaveLine} />
 

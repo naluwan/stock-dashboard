@@ -1,99 +1,127 @@
-import { Purchase, Sale, StockWithCalculations, IStock } from '@/types';
+import { Purchase, Sale, StockWithCalculations, IStock, ITradingConfig, Market } from '@/types';
 
-interface MovingAverageState {
-  averagePrice: number;
-  totalShares: number;
-  realizedPL: number;
-  saleAvgCosts: number[]; // 對應 stock.sales[i] 的動態移動均價快照
+export const DEFAULT_TRADING_CONFIG: ITradingConfig = {
+  twStockFeeRate: 0.1425,
+  twStockMinFee: 20,
+  usStockFeeRate: 0,
+};
+
+/** 證交稅率（政府固定）：台股個股 0.3%、ETF 0.1%、美股 0% */
+function getStockTaxRate(symbol: string, market: Market): number {
+  if (market === 'US') return 0;
+  return symbol.startsWith('00') ? 0.001 : 0.003;
 }
 
 /**
- * 按時間順序處理買入 + 賣出，計算「移動加權平均成本」。
- * - 買入時：剩餘成本 += 新買金額 + 手續費；股數累加；均價 = 剩餘成本 / 剩餘股數
- * - 賣出時：先用「當下均價」記錄這筆賣出的成本基礎；然後扣掉對應成本與股數；均價不變
- * 這與券商 App 顯示的均價邏輯一致。
+ * 計算「假設現在賣出」要付的手續費 + 證交稅。
+ * 用於把市值預扣成「實際能拿到的金額」，跟券商「預估損益」對齊。
  */
-function computeMovingAverage(stock: { purchases: Purchase[]; sales?: Sale[] }): MovingAverageState {
+export function calculateSellingCost(
+  marketValue: number,
+  symbol: string,
+  market: Market,
+  config: ITradingConfig = DEFAULT_TRADING_CONFIG,
+): number {
+  if (marketValue <= 0) return 0;
+  const taxRate = getStockTaxRate(symbol, market);
+  const feeRatePct = market === 'TW' ? config.twStockFeeRate : config.usStockFeeRate;
+  const minFee = market === 'TW' ? config.twStockMinFee : 0;
+
+  const fee = Math.max(marketValue * (feeRatePct / 100), minFee);
+  const tax = marketValue * taxRate;
+  return fee + tax;
+}
+
+interface FIFOState {
+  averagePrice: number;
+  totalShares: number;
+  totalCost: number;
+  realizedPL: number;
+  saleAvgCosts: number[]; // 對應 stock.sales[i] 的「該筆賣出實際扣除單位成本」
+}
+
+/**
+ * FIFO（先進先出 / 個別批次成本法）：
+ * - 買入批次依日期排序進入佇列
+ * - 賣出時從最早批次開始消耗，跨多批次可分攤
+ * - 平均成本 = 剩餘批次（股數 × 含手續費分攤的單位成本）/ 剩餘股數
+ * - 已實現損益 = 賣出回收 − 該筆消耗到的批次成本
+ * 這與多數台灣券商（含對帳單）的算法一致。
+ */
+function computeFIFO(stock: { purchases: Purchase[]; sales?: Sale[] }): FIFOState {
   const purchases = stock.purchases || [];
   const sales = stock.sales || [];
 
-  type Event =
-    | { kind: 'buy'; time: number; order: number; idx: number; shares: number; price: number; commission: number }
-    | { kind: 'sell'; time: number; order: number; idx: number; shares: number; price: number; commission: number; tax: number };
-
-  const events: Event[] = [];
-  purchases.forEach((p, idx) => {
-    events.push({
-      kind: 'buy',
+  // 買入批次按時間排序，記下原 idx 以便手續費分攤
+  const lots = purchases
+    .map((p, idx) => ({
+      origIdx: idx,
       time: new Date(p.date).getTime(),
-      order: 0,
-      idx,
-      shares: p.shares,
+      remaining: p.shares,
+      origShares: p.shares,
       price: p.price,
       commission: p.commission || 0,
-    });
-  });
-  sales.forEach((s, idx) => {
-    events.push({
-      kind: 'sell',
+    }))
+    .sort((a, b) => a.time - b.time || a.origIdx - b.origIdx);
+
+  // 賣出按時間排序，保留原 idx 以寫回 saleAvgCosts
+  const sortedSales = sales
+    .map((s, idx) => ({
+      origIdx: idx,
       time: new Date(s.date).getTime(),
-      order: 1, // 同一天時，買入先於賣出處理
-      idx,
       shares: s.shares,
       price: s.price,
       commission: s.commission || 0,
       tax: s.tax || 0,
-    });
-  });
+    }))
+    .sort((a, b) => a.time - b.time || a.origIdx - b.origIdx);
 
-  events.sort((a, b) => {
-    if (a.time !== b.time) return a.time - b.time;
-    if (a.order !== b.order) return a.order - b.order;
-    return a.idx - b.idx;
-  });
-
-  let shares = 0;
-  let costBasis = 0;
   let realizedPL = 0;
   const saleAvgCosts = new Array<number>(sales.length).fill(0);
 
-  for (const ev of events) {
-    if (ev.kind === 'buy') {
-      costBasis += ev.shares * ev.price + ev.commission;
-      shares += ev.shares;
-    } else {
-      const avgAtSale = shares > 0 ? costBasis / shares : 0;
-      saleAvgCosts[ev.idx] = avgAtSale;
+  for (const sale of sortedSales) {
+    let toSell = sale.shares;
+    let saleCostBasis = 0;
 
-      const proceeds = ev.price * ev.shares - ev.commission - ev.tax;
-      realizedPL += proceeds - avgAtSale * ev.shares;
-
-      costBasis -= avgAtSale * ev.shares;
-      shares -= ev.shares;
-      if (shares <= 0) {
-        shares = 0;
-        costBasis = 0;
-      }
+    for (const lot of lots) {
+      if (toSell <= 0) break;
+      if (lot.remaining <= 0) continue;
+      const take = Math.min(lot.remaining, toSell);
+      const unitCost = lot.price + (lot.origShares > 0 ? lot.commission / lot.origShares : 0);
+      saleCostBasis += take * unitCost;
+      lot.remaining -= take;
+      toSell -= take;
     }
+
+    const proceeds = sale.price * sale.shares - sale.commission - sale.tax;
+    realizedPL += proceeds - saleCostBasis;
+    saleAvgCosts[sale.origIdx] = sale.shares > 0 ? saleCostBasis / sale.shares : 0;
+  }
+
+  let totalShares = 0;
+  let totalCost = 0;
+  for (const lot of lots) {
+    if (lot.remaining <= 0) continue;
+    totalShares += lot.remaining;
+    const unitCost = lot.price + (lot.origShares > 0 ? lot.commission / lot.origShares : 0);
+    totalCost += lot.remaining * unitCost;
   }
 
   return {
-    averagePrice: shares > 0 ? costBasis / shares : 0,
-    totalShares: shares,
+    averagePrice: totalShares > 0 ? totalCost / totalShares : 0,
+    totalShares,
+    totalCost,
     realizedPL,
     saleAvgCosts,
   };
 }
 
-/**
- * 計算目前持股的「移動加權平均成本」（含買入手續費）。
- * 必須傳入完整 stock（包含 sales），才能正確反映賣出對均價的影響。
- */
+/** 目前持股的單位成本（含手續費分攤、依 FIFO 計算）。 */
 export function calculateAveragePrice(stock: { purchases: Purchase[]; sales?: Sale[] }): number {
-  return computeMovingAverage(stock).averagePrice;
+  return computeFIFO(stock).averagePrice;
 }
 
-/** 持有股數 = 買入總股數 - 賣出總股數 */
+/** 持有股數 = 買入總股數 − 賣出總股數 */
 export function calculateTotalShares(purchases: Purchase[], sales?: Sale[]): number {
   if (!purchases || purchases.length === 0) return 0;
   const bought = purchases.reduce((sum, p) => sum + p.shares, 0);
@@ -101,19 +129,21 @@ export function calculateTotalShares(purchases: Purchase[], sales?: Sale[]): num
   return bought - sold;
 }
 
-/** 目前持有部位的成本（= 移動均價 × 持有股數） */
+/** 目前持有部位的剩餘成本（FIFO 加總） */
 export function calculateTotalCost(stock: { purchases: Purchase[]; sales?: Sale[] }): number {
-  const state = computeMovingAverage(stock);
-  return state.averagePrice * state.totalShares;
+  return computeFIFO(stock).totalCost;
 }
 
 /**
- * 已實現損益（移動加權）：依時間順序逐筆賣出累加。
- * - 不分年度時：直接回傳 computeMovingAverage 的 realizedPL（總和）
- * - 指定年度時：對該年內的賣出按「該筆賣出當下動態均價」計算
+ * 已實現損益（FIFO 個別批次成本法）。
+ * - 不分年度：直接回傳累計
+ * - 指定年度：用該年內每筆賣出對應的 saleAvgCost 重算
  */
-export function calculateRealizedPL(stock: { purchases: Purchase[]; sales?: Sale[] }, year?: number): number {
-  const state = computeMovingAverage(stock);
+export function calculateRealizedPL(
+  stock: { purchases: Purchase[]; sales?: Sale[] },
+  year?: number,
+): number {
+  const state = computeFIFO(stock);
   const sales = stock.sales || [];
   if (!year) return state.realizedPL;
   return sales.reduce((sum, s, i) => {
@@ -124,13 +154,17 @@ export function calculateRealizedPL(stock: { purchases: Purchase[]; sales?: Sale
   }, 0);
 }
 
-export function enrichStockWithCalculations(stock: IStock, currentPrice?: number): StockWithCalculations {
-  const state = computeMovingAverage(stock);
+export function enrichStockWithCalculations(
+  stock: IStock,
+  currentPrice?: number,
+  tradingConfig: ITradingConfig = DEFAULT_TRADING_CONFIG,
+): StockWithCalculations {
+  const state = computeFIFO(stock);
   const averagePrice = state.averagePrice;
   const totalShares = state.totalShares;
-  const totalCost = averagePrice * totalShares;
+  const totalCost = state.totalCost;
 
-  // 覆寫 sales 的 avgCostAtSale 為動態移動均價（給 UI 元件使用，不寫回 DB）
+  // 覆寫 sales 的 avgCostAtSale 為 FIFO 動態值（給 UI 用，不寫回 DB）
   const sales = (stock.sales || []).map((s, i) => ({
     ...s,
     avgCostAtSale: state.saleAvgCosts[i] ?? s.avgCostAtSale,
@@ -146,12 +180,16 @@ export function enrichStockWithCalculations(stock: IStock, currentPrice?: number
   };
 
   if (currentPrice !== undefined) {
+    const grossValue = currentPrice * totalShares;
+    const sellingCost = calculateSellingCost(grossValue, stock.symbol, stock.market, tradingConfig);
+    const netValue = grossValue - sellingCost;
+
     result.currentPrice = currentPrice;
     result.priceChange = currentPrice - averagePrice;
     result.priceChangePercent = averagePrice > 0 ? ((currentPrice - averagePrice) / averagePrice) * 100 : 0;
-    result.totalValue = currentPrice * totalShares;
-    result.totalProfit = result.totalValue - totalCost;
-    result.totalProfitPercent = totalCost > 0 ? ((result.totalValue - totalCost) / totalCost) * 100 : 0;
+    result.totalValue = netValue;
+    result.totalProfit = netValue - totalCost;
+    result.totalProfitPercent = totalCost > 0 ? ((netValue - totalCost) / totalCost) * 100 : 0;
   }
 
   return result;

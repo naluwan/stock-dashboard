@@ -30,8 +30,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
-import { IStock, Market, PriceData } from '@/types';
-import { enrichStockWithCalculations, formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
+import { IStock, Market, PriceData, ITradingConfig } from '@/types';
+import { enrichStockWithCalculations, formatCurrency, formatPercent, formatNumber, DEFAULT_TRADING_CONFIG } from '@/lib/utils';
 import StockPriceChart from '@/components/dashboard/StockPriceChart';
 import StockAnalysis from '@/components/stocks/StockAnalysis';
 import StockFundamentals from '@/components/stocks/StockFundamentals';
@@ -69,6 +69,7 @@ function SearchPageInner() {
   const [searchHistory, setSearchHistory] = useState<HistoryItem[]>([]);
   const [favoriteSymbols, setFavoriteSymbols] = useState<Set<string>>(new Set());
   const [ownedMap, setOwnedMap] = useState<Map<string, IStock>>(new Map());
+  const [tradingConfig, setTradingConfig] = useState<ITradingConfig>(DEFAULT_TRADING_CONFIG);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -99,11 +100,22 @@ function SearchPageInner() {
     } catch { /* ignore */ }
   }, []);
 
+  const loadTradingConfig = useCallback(async () => {
+    try {
+      const res = await fetch('/api/trading-config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data.twStockFeeRate === 'number') setTradingConfig(data);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     loadHistory();
     loadFavorites();
     loadOwnedStocks();
-  }, [loadHistory, loadFavorites, loadOwnedStocks]);
+    loadTradingConfig();
+  }, [loadHistory, loadFavorites, loadOwnedStocks, loadTradingConfig]);
 
   const saveSearchHistory = async (symbol: string, name: string, stockMarket: Market) => {
     try {
@@ -452,7 +464,7 @@ function SearchPageInner() {
             {(() => {
               const owned = ownedMap.get(`${selectedQuote.market}_${selectedQuote.symbol}`);
               const enriched = owned
-                ? enrichStockWithCalculations(owned, selectedQuote.currentPrice)
+                ? enrichStockWithCalculations(owned, selectedQuote.currentPrice, tradingConfig)
                 : null;
               return (
                 <StockAnalysis

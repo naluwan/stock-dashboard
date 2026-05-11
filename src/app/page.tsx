@@ -11,7 +11,7 @@ import PriceChart from '@/components/dashboard/PriceChart';
 import YearlyPLReport from '@/components/dashboard/YearlyPLReport';
 import PortfolioAnalysisDrawer from '@/components/dashboard/PortfolioAnalysisDrawer';
 import { StockWithCalculations, IAlert, IStock } from '@/types';
-import { enrichStockWithCalculations } from '@/lib/utils';
+import { enrichStockWithCalculations, DEFAULT_TRADING_CONFIG } from '@/lib/utils';
 
 export default function DashboardPage() {
   const [stocks, setStocks] = useState<StockWithCalculations[]>([]);
@@ -23,11 +23,20 @@ export default function DashboardPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [stocksRes, alertsRes, rateRes] = await Promise.all([
+      const [stocksRes, alertsRes, rateRes, configRes] = await Promise.all([
         fetch('/api/stocks'),
         fetch('/api/alerts'),
         fetch('/api/exchange-rate'),
+        fetch('/api/trading-config'),
       ]);
+
+      let config = DEFAULT_TRADING_CONFIG;
+      try {
+        const configData = await configRes.json();
+        if (configData && typeof configData.twStockFeeRate === 'number') {
+          config = configData;
+        }
+      } catch { /* ignore */ }
 
       const stocksData: IStock[] = await stocksRes.json();
       const alertsData: IAlert[] = await alertsRes.json();
@@ -48,12 +57,12 @@ export default function DashboardPage() {
           const enrichedStocks = stocksData.map((stock) => {
             const priceKey = `${stock.market}_${stock.symbol}`;
             const priceData = pricesData[priceKey];
-            return enrichStockWithCalculations(stock, priceData?.currentPrice);
+            return enrichStockWithCalculations(stock, priceData?.currentPrice, config);
           });
 
           setStocks(enrichedStocks);
         } catch {
-          setStocks(stocksData.map((stock) => enrichStockWithCalculations(stock)));
+          setStocks(stocksData.map((stock) => enrichStockWithCalculations(stock, undefined, config)));
         }
       } else {
         setStocks([]);

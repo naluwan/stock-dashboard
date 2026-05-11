@@ -90,6 +90,15 @@ export interface INotificationConfig {
   updatedAt?: Date;
 }
 
+export interface ITradingConfig {
+  _id?: string;
+  twStockFeeRate: number;   // 台股手續費率 (%)，預設 0.1425
+  twStockMinFee: number;    // 台股最低手續費 (NT$)，預設 20
+  usStockFeeRate: number;   // 美股手續費率 (%)，預設 0
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface PriceData {
   symbol: string;
   name: string;

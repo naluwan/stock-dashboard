@@ -3,8 +3,9 @@ import connectDB from '@/lib/mongodb';
 import Stock from '@/models/Stock';
 import PortfolioAnalysis from '@/models/PortfolioAnalysis';
 import { calculateIndicators, OHLCV } from '@/lib/technical-indicators';
-import { enrichStockWithCalculations } from '@/lib/utils';
-import { IStock, Market, Sale } from '@/types';
+import { enrichStockWithCalculations, DEFAULT_TRADING_CONFIG } from '@/lib/utils';
+import TradingConfig from '@/models/TradingConfig';
+import { IStock, ITradingConfig, Market, Sale } from '@/types';
 
 export const runtime = 'nodejs';
 
@@ -235,6 +236,12 @@ export async function POST() {
 
     const stocksRaw = await Stock.find({}).lean<IStock[]>();
 
+    let tradingConfig: ITradingConfig = DEFAULT_TRADING_CONFIG;
+    try {
+      const cfg = await TradingConfig.findOne().lean<ITradingConfig>();
+      if (cfg && typeof cfg.twStockFeeRate === 'number') tradingConfig = cfg;
+    } catch { /* ignore */ }
+
     let usdRate = 0;
     try {
       const rateUrl = `https://query1.finance.yahoo.com/v8/finance/chart/TWD%3DX?interval=1d&range=1d`;
@@ -267,7 +274,7 @@ export async function POST() {
       if (candles.length < 20) return null;
 
       const currentPrice = candles[candles.length - 1].close;
-      const enriched = enrichStockWithCalculations(stock, currentPrice);
+      const enriched = enrichStockWithCalculations(stock, currentPrice, tradingConfig);
       const indicators = calculateIndicators(candles);
 
       const last90 = candles.slice(-90);
