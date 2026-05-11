@@ -92,7 +92,7 @@ export async function GET() {
         }
 
         const stock = await Stock.findOne({ symbol: alert.stockSymbol, market: alert.market }).lean();
-        const avgPrice = stock ? calculateAveragePrice(stock.purchases) : 0;
+        const avgPrice = stock ? calculateAveragePrice(stock) : 0;
 
         let shouldTrigger = false;
 

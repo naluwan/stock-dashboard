@@ -75,8 +75,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 計算賣出當下的加權平均成本並鎖定
-    const avgCostAtSale = calculateAveragePrice(stock.purchases);
+    // 計算賣出當下的移動加權平均成本並鎖定（含既有賣出對均價的影響）
+    const avgCostAtSale = calculateAveragePrice(stock);
 
     stock.sales.push({
       shares,

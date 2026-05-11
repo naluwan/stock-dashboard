@@ -3,7 +3,7 @@
 import { Button, Card, Group, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core';
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { StockWithCalculations } from '@/types';
-import { formatNumber, formatPercent, calculateRealizedPL } from '@/lib/utils';
+import { formatNumber, formatPercent } from '@/lib/utils';
 
 interface PortfolioSummaryProps {
   stocks: StockWithCalculations[];
@@ -48,7 +48,7 @@ export default function PortfolioSummary({
   const totalCostTWD = twCost + usCostTWD;
   const totalProfit = totalValue - totalCostTWD;
   const totalProfitPercent = totalCostTWD > 0 ? ((totalValue - totalCostTWD) / totalCostTWD) * 100 : 0;
-  const stockCount = stocks.length;
+  const stockCount = stocks.filter((s) => s.totalShares > 0).length;
 
   const stockPricePL = stocks.reduce((sum, s) => {
     if (s.currentPrice === undefined) return sum;
@@ -68,7 +68,7 @@ export default function PortfolioSummary({
   const fxPLPercent = totalCostTWD > 0 ? (fxPL / totalCostTWD) * 100 : 0;
 
   const totalRealizedPL = stocks.reduce((sum, s) => {
-    const pl = calculateRealizedPL(s.sales || []);
+    const pl = s.realizedPL || 0;
     return sum + (s.market === 'US' && usdRate > 0 ? pl * usdRate : pl);
   }, 0);
 

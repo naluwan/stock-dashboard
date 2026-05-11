@@ -3,7 +3,7 @@ import connectDB from '@/lib/mongodb';
 import Stock from '@/models/Stock';
 import PortfolioAnalysis from '@/models/PortfolioAnalysis';
 import { calculateIndicators, OHLCV } from '@/lib/technical-indicators';
-import { enrichStockWithCalculations, calculateRealizedPL } from '@/lib/utils';
+import { enrichStockWithCalculations } from '@/lib/utils';
 import { IStock, Market, Sale } from '@/types';
 
 export const runtime = 'nodejs';
@@ -292,7 +292,8 @@ export async function POST() {
         ? new Date(sortedPurchases[sortedPurchases.length - 1].date).toISOString().split('T')[0]
         : undefined;
 
-      const sales = (stock.sales || []) as Sale[];
+      // 使用 enriched.sales（含動態移動均價的 avgCostAtSale），而非原始 stock.sales
+      const sales = (enriched.sales || []) as Sale[];
       const sortedSales = [...sales].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
       );
@@ -344,7 +345,7 @@ export async function POST() {
         priceVsSma60: indicators.priceVsSma60,
         volatility,
         saleCount: sales.length,
-        realizedPL: calculateRealizedPL(sales),
+        realizedPL: enriched.realizedPL ?? 0,
         totalSharesSold,
         firstSaleDate,
         lastSaleDate,
